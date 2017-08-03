@@ -239,9 +239,9 @@ def init():
     data_test.close()
 
     # single-instance
-    np.save('./data/s-ins/single_train_word_.npy', np.array(train_sen_all))
-    np.save('./data/s-ins/single_train_pos1_.npy', np.array(train_sen_pos1_all))
-    np.save('./data/s-ins/single_train_pos2_.npy', np.array(train_sen_pos2_all))
+    np.save('./data/s-ins/single_train_word.npy', np.array(train_sen_all))
+    np.save('./data/s-ins/single_train_pos1.npy', np.array(train_sen_pos1_all))
+    np.save('./data/s-ins/single_train_pos2.npy', np.array(train_sen_pos2_all))
     np.save('./data/s-ins/single_train_len.npy', np.array(train_sen_len_all))
     np.save('./data/s-ins/single_train_y.npy', np.array(train_label_all))
 

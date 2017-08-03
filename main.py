@@ -13,7 +13,7 @@ class rnn_setting(object):
 
 
 def main():
-    data_loader = DataLoader('./data', multi_instance=True)
+    data_loader = DataLoader('./data', multi_ins=False)
     pass
 
 if __name__ == '__main__':
