@@ -44,6 +44,8 @@ def init():
     vec.append(np.random.normal(size=dim, loc=0, scale=0.05))
     vec.append(np.random.normal(size=dim, loc=0, scale=0.05))
     vec = np.array(vec, dtype=np.float32)
+    # save vec matrix
+    np.save('./data/vec.npy', vec)
 
     print 'reading relation to id'
     with open('./origin_data/rel2idx.pkl', 'rb') as f:
@@ -55,7 +57,6 @@ def init():
     maxlen = 90
 
     # train data
-
     # single-instance
     train_sen_all = []
     train_sen_pos1_all = []
@@ -89,7 +90,7 @@ def init():
 
             # label one-hot
             y_id = rel
-            label = [0 for i in range(len(relation2id))]
+            label = [0] * len(relation2id)
             label[y_id] = 1
 
             # single-instance
@@ -131,17 +132,20 @@ def init():
                 output.append([word, rel_e1, rel_e2])
 
             # translate the words in sentences to index
-            sentence_idx = []
             for i in range(min(fixlen, len(sentence))):
                 if sentence[i].decode('utf8') not in word2id:
                     word = word2id[u'UNK']
                 else:
                     word = word2id[sentence[i].decode('utf8')]
-                sentence_idx.append(word)
                 output[i][0] = word
 
             # single-instance
-            train_sen_all.append(sentence_idx)
+            sen_idx = [i[0] for i in output]
+            sen_p1 = [i[1] for i in output]
+            sen_p2 = [i[2] for i in output]
+            train_sen_all.append(sen_idx)
+            train_sen_pos1_all.append(sen_p1)
+            train_sen_pos2_all.append(sen_p2)
             train_sen_len_all.append(sen_len)
             # multi-instance
             train_sen[tup][label_tag].append(output)
@@ -150,6 +154,14 @@ def init():
     data_train.close()
 
     # test data
+    # single-instance
+    test_sen_all = []
+    test_sen_pos1_all = []
+    test_sen_pos2_all = []
+    test_sen_len_all = []
+    test_label_all = []
+
+    # multi-instance
     # {entity pair:[[sentence 1],[sentence 2]...]}
     test_sen = {}
     # {entity pair:[sentence 1 length, sentence 2 length],...}
@@ -173,15 +185,19 @@ def init():
             # put the same entity pair sentences into a dict
             tup = (en1, en2)
 
+            y_id = rel
+            label = [0] * len(relation2id)
+            label[y_id] = 1
+
+            # single-instance
+            test_label_all.append(label)
+
+            # multi-instance
             if tup not in test_sen:
                 test_sen[tup] = []
                 test_sen_len[tup] = []
-                y_id = rel
-                label = [0 for i in range(len(relation2id))]
-                label[y_id] = 1
                 test_ans[tup] = label
             else:
-                y_id = rel
                 test_ans[tup][y_id] = 1
 
             # get sentence
@@ -207,17 +223,44 @@ def init():
                     word = word2id[sentence[i].decode('utf8')]
 
                 output[i][0] = word
+
+            # single-instance
+            sen_idx = [i[0] for i in output]
+            sen_p1 = [i[1] for i in output]
+            sen_p2 = [i[2] for i in output]
+            test_sen_all.append(sen_idx)
+            test_sen_pos1_all.append(sen_p1)
+            test_sen_pos2_all.append(sen_p2)
+            test_sen_len_all.append(sen_len)
+            # multi-instance
             test_sen[tup].append(output)
             test_sen_len[tup].append(sen_len)
+
     data_test.close()
 
+    # single-instance
+    np.save('./data/s-ins/single_train_word_.npy', np.array(train_sen_all))
+    np.save('./data/s-ins/single_train_pos1_.npy', np.array(train_sen_pos1_all))
+    np.save('./data/s-ins/single_train_pos2_.npy', np.array(train_sen_pos2_all))
+    np.save('./data/s-ins/single_train_len.npy', np.array(train_sen_len_all))
+    np.save('./data/s-ins/single_train_y.npy', np.array(train_label_all))
+
+    np.save('./data/s-ins/single_test_word.npy', np.array(test_sen_all))
+    np.save('./data/s-ins/single_test_pos1.npy', np.array(test_sen_pos1_all))
+    np.save('./data/s-ins/single_test_pos2.npy', np.array(test_sen_pos2_all))
+    np.save('./data/s-ins/single_test_len.npy', np.array(test_sen_len_all))
+    np.save('./data/s-ins/single_test_y.npy', np.array(test_label_all))
+
+    # multi-instance
     train_x = []
+    train_x_len = []
     train_y = []
     test_x = []
+    test_x_len = []
     test_y = []
 
     print 'organizing train data'
-    f = open('./data/train_q&a.txt', 'w')
+    f = open('./data/m-ins/train_q&a.txt', 'w')
     temp = 0
     for i in train_sen:
         assert len(train_ans[i]) == len(train_sen[i])
@@ -225,16 +268,18 @@ def init():
         lenth = len(train_ans[i])
         for j in range(lenth):
             train_x.append(train_sen[i][j])
+            train_x_len.append(train_sen_len[i][j])
             train_y.append(train_ans[i][j])
             f.write(str(temp) + '\t' + i[0] + '\t' + i[1] + '\t' + str(np.argmax(train_ans[i][j])) + '\n')
             temp += 1
     f.close()
 
     print 'organizing test data'
-    f = open('./data/test_q&a.txt', 'w')
+    f = open('./data/m-ins/test_q&a.txt', 'w')
     temp = 0
     for i in test_sen:
         test_x.append(test_sen[i])
+        test_x_len.append(test_sen_len[i])
         test_y.append(test_ans[i])
         tempstr = ''
         for j in range(len(test_ans[i])):
@@ -245,86 +290,106 @@ def init():
     f.close()
 
     train_x = np.array(train_x)
+    train_x_len = np.array(train_x_len)
     train_y = np.array(train_y)
     test_x = np.array(test_x)
+    test_x_len = np.array(test_x_len)
     test_y = np.array(test_y)
 
-    np.save('./data/vec.npy', vec)
-    np.save('./data/train_x.npy', train_x)
-    np.save('./data/train_y.npy', train_y)
-    np.save('./data/testall_x.npy', test_x)
-    np.save('./data/testall_y.npy', test_y)
+    np.save('./data/m-ins/train_x.npy', train_x)
+    np.save('./data/m-ins/train_len.npy', train_x_len)
+    np.save('./data/m-ins/train_y.npy', train_y)
+    np.save('./data/m-ins/testall_x.npy', test_x)
+    np.save('./data/m-ins/testall_len.npy', test_x_len)
+    np.save('./data/m-ins/testall_y.npy', test_y)
 
     # get test data for P@N evaluation, in which only entity pairs with more than 1 sentence exist
     print 'get test data for p@n test'
 
     pone_test_x = []
+    pone_test_x_len = []
     pone_test_y = []
 
     ptwo_test_x = []
+    ptwo_test_x_len = []
     ptwo_test_y = []
 
     pall_test_x = []
+    pall_test_x_len = []
     pall_test_y = []
 
     for i in range(len(test_x)):
         if len(test_x[i]) > 1:
 
             pall_test_x.append(test_x[i])
+            pall_test_x_len.append(test_x_len[i])
             pall_test_y.append(test_y[i])
 
             onetest = []
+            onetest_len = []
             temp = np.random.randint(len(test_x[i]))
             onetest.append(test_x[i][temp])
+            onetest_len.append(test_x_len[i][temp])
             pone_test_x.append(onetest)
+            pone_test_x_len.append(onetest_len)
             pone_test_y.append(test_y[i])
 
             twotest = []
+            twotest_len = []
             temp1 = np.random.randint(len(test_x[i]))
             temp2 = np.random.randint(len(test_x[i]))
             while temp1 == temp2:
                 temp2 = np.random.randint(len(test_x[i]))
             twotest.append(test_x[i][temp1])
+            twotest_len.append(test_x_len[i][temp1])
             twotest.append(test_x[i][temp2])
             ptwo_test_x.append(twotest)
+            ptwo_test_x_len.append(twotest_len)
             ptwo_test_y.append(test_y[i])
 
     pone_test_x = np.array(pone_test_x)
+    pone_test_x_len = np.array(pone_test_x_len)
     pone_test_y = np.array(pone_test_y)
     ptwo_test_x = np.array(ptwo_test_x)
+    ptwo_test_x_len = np.array(ptwo_test_x_len)
     ptwo_test_y = np.array(ptwo_test_y)
     pall_test_x = np.array(pall_test_x)
+    pall_test_x_len = np.array(pall_test_x_len)
     pall_test_y = np.array(pall_test_y)
 
-    np.save('./data/pone_test_x.npy', pone_test_x)
-    np.save('./data/pone_test_y.npy', pone_test_y)
-    np.save('./data/ptwo_test_x.npy', ptwo_test_x)
-    np.save('./data/ptwo_test_y.npy', ptwo_test_y)
-    np.save('./data/pall_test_x.npy', pall_test_x)
-    np.save('./data/pall_test_y.npy', pall_test_y)
+    np.save('./data/m-ins/pone_test_x.npy', pone_test_x)
+    np.save('./data/m-ins/pone_test_len.npy', pone_test_x_len)
+    np.save('./data/m-ins/pone_test_y.npy', pone_test_y)
+    np.save('./data/m-ins/ptwo_test_x.npy', ptwo_test_x)
+    np.save('./data/m-ins/ptwo_test_len.npy', ptwo_test_x_len)
+    np.save('./data/m-ins/ptwo_test_y.npy', ptwo_test_y)
+    np.save('./data/m-ins/pall_test_x.npy', pall_test_x)
+    np.save('./data/m-ins/pall_test_len.npy', pall_test_x_len)
+    np.save('./data/m-ins/pall_test_y.npy', pall_test_y)
 
 
 def seperate():
+    # train
     print 'reading training data'
-    x_train = np.load('./data/train_x.npy')
+    x_train = np.load('./data/m-ins/train_x.npy')
 
     train_word = []
     train_pos1 = []
     train_pos2 = []
 
     print 'seprating train data'
-    for i in range(len(x_train)):
+    for tup_bag in x_train:
         word = []
         pos1 = []
         pos2 = []
-        for j in x_train[i]:
+        for sent in tup_bag:
             temp_word = []
             temp_pos1 = []
             temp_pos2 = []
-            for k in j:
-                temp_word.append(k[0])
-                temp_pos1.append(k[1])
-                temp_pos2.append(k[2])
+            for word_feature in sent:
+                temp_word.append(word_feature[0])
+                temp_pos1.append(word_feature[1])
+                temp_pos2.append(word_feature[2])
             word.append(temp_word)
             pos1.append(temp_pos1)
             pos2.append(temp_pos2)
@@ -335,128 +400,30 @@ def seperate():
     train_word = np.array(train_word)
     train_pos1 = np.array(train_pos1)
     train_pos2 = np.array(train_pos2)
-    np.save('./data/train_word.npy', train_word)
-    np.save('./data/train_pos1.npy', train_pos1)
-    np.save('./data/train_pos2.npy', train_pos2)
+    np.save('./data/m-ins/train_word.npy', train_word)
+    np.save('./data/m-ins/train_pos1.npy', train_pos1)
+    np.save('./data/m-ins/train_pos2.npy', train_pos2)
 
-    print 'reading p-one test data'
-    x_test = np.load('./data/pone_test_x.npy')
-    print 'seperating p-one test data'
-    test_word = []
-    test_pos1 = []
-    test_pos2 = []
-
-    for i in range(len(x_test)):
-        word = []
-        pos1 = []
-        pos2 = []
-        for j in x_test[i]:
-            temp_word = []
-            temp_pos1 = []
-            temp_pos2 = []
-            for k in j:
-                temp_word.append(k[0])
-                temp_pos1.append(k[1])
-                temp_pos2.append(k[2])
-            word.append(temp_word)
-            pos1.append(temp_pos1)
-            pos2.append(temp_pos2)
-        test_word.append(word)
-        test_pos1.append(pos1)
-        test_pos2.append(pos2)
-
-    test_word = np.array(test_word)
-    test_pos1 = np.array(test_pos1)
-    test_pos2 = np.array(test_pos2)
-    np.save('./data/pone_test_word.npy', test_word)
-    np.save('./data/pone_test_pos1.npy', test_pos1)
-    np.save('./data/pone_test_pos2.npy', test_pos2)
-
-    print 'reading p-two test data'
-    x_test = np.load('./data/ptwo_test_x.npy')
-    print 'seperating p-two test data'
-    test_word = []
-    test_pos1 = []
-    test_pos2 = []
-
-    for i in range(len(x_test)):
-        word = []
-        pos1 = []
-        pos2 = []
-        for j in x_test[i]:
-            temp_word = []
-            temp_pos1 = []
-            temp_pos2 = []
-            for k in j:
-                temp_word.append(k[0])
-                temp_pos1.append(k[1])
-                temp_pos2.append(k[2])
-            word.append(temp_word)
-            pos1.append(temp_pos1)
-            pos2.append(temp_pos2)
-        test_word.append(word)
-        test_pos1.append(pos1)
-        test_pos2.append(pos2)
-
-    test_word = np.array(test_word)
-    test_pos1 = np.array(test_pos1)
-    test_pos2 = np.array(test_pos2)
-    np.save('./data/ptwo_test_word.npy', test_word)
-    np.save('./data/ptwo_test_pos1.npy', test_pos1)
-    np.save('./data/ptwo_test_pos2.npy', test_pos2)
-
-    print 'reading p-all test data'
-    x_test = np.load('./data/pall_test_x.npy')
-    print 'seperating p-all test data'
-    test_word = []
-    test_pos1 = []
-    test_pos2 = []
-
-    for i in range(len(x_test)):
-        word = []
-        pos1 = []
-        pos2 = []
-        for j in x_test[i]:
-            temp_word = []
-            temp_pos1 = []
-            temp_pos2 = []
-            for k in j:
-                temp_word.append(k[0])
-                temp_pos1.append(k[1])
-                temp_pos2.append(k[2])
-            word.append(temp_word)
-            pos1.append(temp_pos1)
-            pos2.append(temp_pos2)
-        test_word.append(word)
-        test_pos1.append(pos1)
-        test_pos2.append(pos2)
-
-    test_word = np.array(test_word)
-    test_pos1 = np.array(test_pos1)
-    test_pos2 = np.array(test_pos2)
-    np.save('./data/pall_test_word.npy', test_word)
-    np.save('./data/pall_test_pos1.npy', test_pos1)
-    np.save('./data/pall_test_pos2.npy', test_pos2)
-
+    # test
     print 'seperating test all data'
-    x_test = np.load('./data/testall_x.npy')
+    x_test = np.load('./data/m-ins/testall_x.npy')
 
     test_word = []
     test_pos1 = []
     test_pos2 = []
 
-    for i in range(len(x_test)):
+    for tup_bag in x_test:
         word = []
         pos1 = []
         pos2 = []
-        for j in x_test[i]:
+        for sent in tup_bag:
             temp_word = []
             temp_pos1 = []
             temp_pos2 = []
-            for k in j:
-                temp_word.append(k[0])
-                temp_pos1.append(k[1])
-                temp_pos2.append(k[2])
+            for word_feature in sent:
+                temp_word.append(word_feature[0])
+                temp_pos1.append(word_feature[1])
+                temp_pos2.append(word_feature[2])
             word.append(temp_word)
             pos1.append(temp_pos1)
             pos2.append(temp_pos2)
@@ -468,35 +435,74 @@ def seperate():
     test_pos1 = np.array(test_pos1)
     test_pos2 = np.array(test_pos2)
 
-    np.save('./data/testall_word.npy', test_word)
-    np.save('./data/testall_pos1.npy', test_pos1)
-    np.save('./data/testall_pos2.npy', test_pos2)
+    np.save('./data/m-ins/testall_word.npy', test_word)
+    np.save('./data/m-ins/testall_pos1.npy', test_pos1)
+    np.save('./data/m-ins/testall_pos2.npy', test_pos2)
+
+    for pn in ['pone', 'ptwo', 'pall']:
+        print 'reading {} test data'.format(pn)
+        x_test = np.load('./data/m-ins/{}_test_x.npy'.format(pn))
+
+        test_word = []
+        test_pos1 = []
+        test_pos2 = []
+
+        for tup_bag in x_test:
+            word = []
+            pos1 = []
+            pos2 = []
+            for sent in tup_bag:
+                temp_word = []
+                temp_pos1 = []
+                temp_pos2 = []
+                for word_feature in sent:
+                    temp_word.append(word_feature[0])
+                    temp_pos1.append(word_feature[1])
+                    temp_pos2.append(word_feature[2])
+                word.append(temp_word)
+                pos1.append(temp_pos1)
+                pos2.append(temp_pos2)
+            test_word.append(word)
+            test_pos1.append(pos1)
+            test_pos2.append(pos2)
+
+        test_word = np.array(test_word)
+        test_pos1 = np.array(test_pos1)
+        test_pos2 = np.array(test_pos2)
+        np.save('./data/m-ins/{}_test_word.npy'.format(pn), test_word)
+        np.save('./data/m-ins/{}_test_pos1.npy'.format(pn), test_pos1)
+        np.save('./data/m-ins/{}_test_pos2.npy'.format(pn), test_pos2)
 
 
 def getsmall():
     print 'reading training data'
-    word = np.load('./data/train_word.npy')
-    pos1 = np.load('./data/train_pos1.npy')
-    pos2 = np.load('./data/train_pos2.npy')
-    y = np.load('./data/train_y.npy')
+    word = np.load('./data/m-ins/train_word.npy')
+    pos1 = np.load('./data/m-ins/train_pos1.npy')
+    pos2 = np.load('./data/m-ins/train_pos2.npy')
+    slen = np.load('./data/m-ins/train_len.npy')
+    y = np.load('./data/m-ins/train_y.npy')
 
     new_word = []
     new_pos1 = []
     new_pos2 = []
+    new_slen = []
     new_y = []
 
     # we slice some big batch in train data into small batches in case of running out of memory
     print 'get small training data'
+    c0, c1, c2, c3, c4 = 0, 0, 0, 0, 0
     for i in range(len(word)):
         lenth = len(word[i])
         if lenth <= 1000:
+            c0 += 1
             new_word.append(word[i])
             new_pos1.append(pos1[i])
             new_pos2.append(pos2[i])
+            new_slen.append(slen[i])
             new_y.append(y[i])
 
         if 1000 < lenth < 2000:
-            print '1000 - 2000'
+            c1 += 1
             new_word.append(word[i][:1000])
             new_word.append(word[i][1000:])
 
@@ -506,11 +512,14 @@ def getsmall():
             new_pos2.append(pos2[i][:1000])
             new_pos2.append(pos2[i][1000:])
 
+            new_slen.append(slen[i][:1000])
+            new_slen.append(slen[i][1000:])
+
             new_y.append(y[i])
             new_y.append(y[i])
 
         if 2000 < lenth < 3000:
-            print '2000 - 3000'
+            c1 += 1
             new_word.append(word[i][:1000])
             new_word.append(word[i][1000:2000])
             new_word.append(word[i][2000:])
@@ -523,12 +532,16 @@ def getsmall():
             new_pos2.append(pos2[i][1000:2000])
             new_pos2.append(pos2[i][2000:])
 
+            new_slen.append(slen[i][:1000])
+            new_slen.append(slen[i][1000:2000])
+            new_slen.append(slen[i][2000:])
+
             new_y.append(y[i])
             new_y.append(y[i])
             new_y.append(y[i])
 
         if 3000 < lenth < 4000:
-            print '3000 - 4000'
+            c1 += 1
             new_word.append(word[i][:1000])
             new_word.append(word[i][1000:2000])
             new_word.append(word[i][2000:3000])
@@ -544,13 +557,18 @@ def getsmall():
             new_pos2.append(pos2[i][2000:3000])
             new_pos2.append(pos2[i][3000:])
 
+            new_slen.append(slen[i][:1000])
+            new_slen.append(slen[i][1000:2000])
+            new_slen.append(slen[i][2000:3000])
+            new_slen.append(slen[i][3000:])
+
             new_y.append(y[i])
             new_y.append(y[i])
             new_y.append(y[i])
             new_y.append(y[i])
 
         if lenth > 4000:
-            print '4000'
+            c1 += 1
             new_word.append(word[i][:1000])
             new_word.append(word[i][1000:2000])
             new_word.append(word[i][2000:3000])
@@ -569,6 +587,12 @@ def getsmall():
             new_pos2.append(pos2[i][3000:4000])
             new_pos2.append(pos2[i][4000:])
 
+            new_slen.append(slen[i][:1000])
+            new_slen.append(slen[i][1000:2000])
+            new_slen.append(slen[i][2000:3000])
+            new_slen.append(slen[i][3000:4000])
+            new_slen.append(slen[i][4000:])
+
             new_y.append(y[i])
             new_y.append(y[i])
             new_y.append(y[i])
@@ -578,22 +602,28 @@ def getsmall():
     new_word = np.array(new_word)
     new_pos1 = np.array(new_pos1)
     new_pos2 = np.array(new_pos2)
+    new_slen = np.array(new_slen)
     new_y = np.array(new_y)
 
-    np.save('./data/small_word.npy', new_word)
-    np.save('./data/small_pos1.npy', new_pos1)
-    np.save('./data/small_pos2.npy', new_pos2)
-    np.save('./data/small_y.npy', new_y)
+    np.save('./data/m-ins/small_word.npy', new_word)
+    np.save('./data/m-ins/small_pos1.npy', new_pos1)
+    np.save('./data/m-ins/small_pos2.npy', new_pos2)
+    np.save('./data/m-ins/small_len.npy', new_slen)
+    np.save('./data/m-ins/small_y.npy', new_y)
+
+    print '0-1000:{}, 1000-2000:{}, 2000-3000:{}, 3000-4000:{}, 4000<:{}'.format(
+        c0, c1, c2, c3, c4
+    )
 
 
 # get answer metric for PR curve evaluation
 def getans():
-    test_y = np.load('./data/testall_y.npy')
+    test_y = np.load('./data/m-ins/testall_y.npy')
     eval_y = []
     for i in test_y:
         eval_y.append(i[1:])
     allans = np.reshape(eval_y, (-1))
-    np.save('./data/allans.npy', allans)
+    np.save('./data/m-ins/allans.npy', allans)
 
 
 def get_metadata():
@@ -606,8 +636,8 @@ def get_metadata():
 
 
 if __name__ == '__main__':
-    # init()
+    init()
     seperate()
-    # getsmall()
-    # getans()
-    # get_metadata()
+    getsmall()
+    getans()
+    get_metadata()
