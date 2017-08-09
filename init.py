@@ -320,7 +320,6 @@ def init():
 
     for i in range(len(test_x)):
         if len(test_x[i]) > 1:
-
             pall_test_x.append(test_x[i])
             pall_test_x_len.append(test_x_len[i])
             pall_test_y.append(test_y[i])
