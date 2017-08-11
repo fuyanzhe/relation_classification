@@ -4,6 +4,15 @@ import random
 import numpy as np
 
 
+class InputData(object):
+    def __init__(self, word, pos1, pos2, slen, y):
+        self.word = word
+        self.pos1 = pos1
+        self.pos2 = pos2
+        self.slen = slen
+        self.y = y
+
+
 class DataLoader(object):
     def __init__(self, data_dir, multi_ins=True):
         self.multi_ins = multi_ins
@@ -56,12 +65,17 @@ class DataLoader(object):
             random.shuffle(train_order)
             batch_num = int(len(train_order) / batch_size)
             for i in range(batch_num):
-                batch= dict()
                 batch_order = train_order[i * batch_size: (i + 1) * batch_size]
-                batch['word'] = self.train_word[batch_order]
-                batch['pos1'] = self.train_pos1[batch_order]
-                batch['pos2'] = self.train_pos2[batch_order]
-                batch['len'] = self.train_len[batch_order]
-                batch['y'] = self.train_y[batch_order]
+                batch = InputData(self.train_word[batch_order],
+                                  self.train_pos1[batch_order],
+                                  self.train_pos2[batch_order],
+                                  self.train_len[batch_order],
+                                  self.train_y[batch_order])
                 yield batch
 
+    def get_test_data(self):
+        if self.multi_ins:
+            pass
+        else:
+            test_data = InputData(self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y)
+            return test_data
