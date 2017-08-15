@@ -58,20 +58,17 @@ class DataLoader(object):
             self.test_pos2)
 
     def get_train_batches(self, batch_size):
-        if self.multi_ins:
-            pass
-        else:
-            train_order = range(len(self.train_y))
-            random.shuffle(train_order)
-            batch_num = int(len(train_order) / batch_size)
-            for i in range(batch_num):
-                batch_order = train_order[i * batch_size: (i + 1) * batch_size]
-                batch = InputData(self.train_word[batch_order],
-                                  self.train_pos1[batch_order],
-                                  self.train_pos2[batch_order],
-                                  self.train_len[batch_order],
-                                  self.train_y[batch_order])
-                yield batch
+        train_order = range(len(self.train_y))
+        random.shuffle(train_order)
+        batch_num = int(len(train_order) / batch_size)
+        for i in range(batch_num):
+            batch_order = train_order[i * batch_size: (i + 1) * batch_size]
+            batch = InputData(self.train_word[batch_order],
+                              self.train_pos1[batch_order],
+                              self.train_pos2[batch_order],
+                              self.train_len[batch_order],
+                              self.train_y[batch_order])
+            yield batch
 
     def get_test_data(self):
         if self.multi_ins:
