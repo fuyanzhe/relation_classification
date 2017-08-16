@@ -22,3 +22,15 @@ class RNNSetting(object):
         self.hidden_size = 100
         self.layers = 1
         self.learning_rate = None
+
+
+class RNNMiSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sent_len = 100
+        self.hidden_size = 100
+        self.layers = 1
+        self.learning_rate = None
+        self.bag_num = None

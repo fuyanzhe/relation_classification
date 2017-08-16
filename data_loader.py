@@ -36,6 +36,14 @@ class DataLoader(object):
             self.test_pos2 = np.load('{}/m-ins/pall_test_pos2.npy'.format(data_dir))
             self.test_len = np.load('{}/m-ins/pall_test_len.npy'.format(data_dir))
 
+            print 'reading single testing data'
+            self.test_y_single = np.load('{}/s-ins/single_test_y.npy'.format(data_dir))
+            self.test_word_single = np.load('{}/s-ins/single_test_word.npy'.format(data_dir))
+            self.test_pos1_single = np.load('{}/s-ins/single_test_pos1.npy'.format(data_dir))
+            self.test_pos2_single = np.load('{}/s-ins/single_test_pos2.npy'.format(data_dir))
+            self.test_len_single = np.load('{}/s-ins/single_test_len.npy'.format(data_dir))
+
+
         else:
             # 单实例模型
             print 'reading training data'
@@ -72,7 +80,12 @@ class DataLoader(object):
 
     def get_test_data(self):
         if self.multi_ins:
-            pass
+            test_data = InputData(self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y)
+            test_data_single = InputData(
+                self.test_word_single, self.test_pos1_single, self.test_pos2_single,
+                self.test_len_single, self.test_y_single
+            )
+            return test_data, test_data_single
         else:
             test_data = InputData(self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y)
             return test_data

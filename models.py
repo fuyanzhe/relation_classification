@@ -497,6 +497,7 @@ class RNN_MI(object):
         self.pos_num = setting.pos_num
         self.pos_size = setting.pos_size
         self.learning_rate = setting.learning_rate
+        self.bag_num = setting.bag_num
 
         # embedding matrix
         self.embed_matrix_word = tf.get_variable(
@@ -508,7 +509,7 @@ class RNN_MI(object):
         self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
 
         # shape of bags
-        self.bag_shapes = tf.placeholder(tf.int32, [None, 1], name='bag_shapes')
+        self.bag_shapes = tf.placeholder(tf.int32, [None], name='bag_shapes')
         self.instance_num = self.bag_shapes[-1]
 
         # inputs
@@ -541,52 +542,83 @@ class RNN_MI(object):
             # rnn
             self.outputs, self.states = tf.contrib.rnn.static_rnn(self.lstm_cell, self.emb_all_us, dtype=tf.float32)
 
-            self.output_final = self.outputs[-1]
+            self.sen_emb = self.outputs[-1]
 
-        # softmax
-        with tf.name_scope('softmax'):
-            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
-            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
-            self.softmax_res = tf.nn.softmax(self.softmax_pred)
+        with tf.name_scope('sentence_attention'):
+            # sentence-level attention layer
+            sen_repre = []
+            sen_alpha = []
+            sen_s = []
+            sen_out = []
+            self.prob = []
+            self.predictions = []
+            self.loss = []
+            # self.accuracy = []
+            self.total_loss = 0.0
 
-        # get max softmax predict result of each relation
-        self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
+            self.sen_a = tf.get_variable('attention_A', [self.hidden_size])
+            self.sen_r = tf.get_variable('query_r', [self.hidden_size, 1])
+            relation_embedding = tf.get_variable('relation_embedding', [self.class_num, self.hidden_size])
+            sen_d = tf.get_variable('bias_d', [self.class_num])
 
-        # class label
-        self.class_label = tf.argmax(self.softmax_res, 1)
+            for i in range(self.bag_num):
+                sen_repre.append(tf.tanh(self.sen_emb[self.bag_shapes[i]:self.bag_shapes[i + 1]]))
+                bag_size = self.bag_shapes[i + 1] - self.bag_shapes[i]
 
-        # choose the min loss instance index
-        self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.softmax_pred, labels=self.input_labels)
-        self.min_loss_idx = tf.argmin(self.instance_loss, 0)
+                sen_alpha.append(
+                    tf.reshape(
+                        tf.nn.softmax(
+                            tf.reshape(tf.matmul(tf.multiply(sen_repre[i], self.sen_a), self.sen_r), [bag_size])
+                        ),
+                        [1, bag_size]
+                    )
+                )
 
-        # model loss
-        self.model_loss = tf.reduce_mean(self.instance_loss)
+                sen_s.append(tf.reshape(tf.matmul(sen_alpha[i], sen_repre[i]), [self.hidden_size, 1]))
+                sen_out.append(tf.add(tf.reshape(tf.matmul(relation_embedding, sen_s[i]), [self.class_num]), sen_d))
+
+                self.prob.append(tf.nn.softmax(sen_out[i]))
+
+                with tf.name_scope("output"):
+                    self.predictions.append(tf.argmax(self.prob[i], 0, name="predictions"))
+
+                with tf.name_scope("loss"):
+                    self.loss.append(tf.reduce_mean(
+                        tf.nn.softmax_cross_entropy_with_logits(logits=sen_out[i], labels=self.input_labels[i])))
+                    if i == 0:
+                        self.total_loss = self.loss[i]
+                    else:
+                        self.total_loss += self.loss[i]
+
+                # with tf.name_scope("accuracy"):
+                #     self.accuracy.append(
+                #         tf.reduce_mean(tf.cast(tf.equal(self.predictions[i], tf.argmax(self.input_labels[i], 0)), "float"),
+                #                        name="accuracy"))
 
         # optimizer
         if self.learning_rate:
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.total_loss)
         else:
-            self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
+            self.optimizer = tf.train.AdamOptimizer().minimize(self.total_loss)
 
         # # saver
         # self.saver = tf.train.Saver(tf.all_variables())
 
     def fit(self, session, input_data, dropout_keep_rate):
-        total_shape = []
+        total_shape = [0]
         total_num = 0
         total_word = []
         total_pos1 = []
         total_pos2 = []
         for bag_idx in range(len(input_data.word)):
-            total_shape.append(total_num)
             total_num += len(input_data.word[bag_idx])
+            total_shape.append(total_num)
             for sent in input_data.word[bag_idx]:
                 total_word.append(sent)
             for pos1 in input_data.pos1[bag_idx]:
                 total_pos1.append(pos1)
             for pos2 in input_data.pos2[bag_idx]:
-                total_word.append(pos2)
+                total_pos2.append(pos2)
         feed_dict = {
             self.bag_shapes: total_shape,
             self.input_words: total_word,
@@ -596,15 +628,20 @@ class RNN_MI(object):
             self.dropout_keep_rate: dropout_keep_rate
         }
         session.run(self.optimizer, feed_dict=feed_dict)
-        model_loss = session.run(self.model_loss, feed_dict=feed_dict)
+        model_loss = session.run(self.total_loss, feed_dict=feed_dict)
         return model_loss
 
     def evaluate(self, session, input_data):
-        feed_dict = {self.input_words: input_data.word,
-                     self.input_pos1: input_data.pos1,
-                     self.input_pos2: input_data.pos2,
-                     self.input_labels: input_data.y,
-                     self.dropout_keep_rate: 1}
-        model_loss, label_pred = session.run([self.model_loss, self.class_label], feed_dict=feed_dict)
+        total_shape = range(len(input_data.word) + 1)
+        feed_dict = {
+            self.bag_shapes: total_shape,
+            self.input_words: input_data.word,
+            self.input_pos1: input_data.pos1,
+            self.input_pos2: input_data.pos2,
+            self.input_labels: input_data.y,
+            self.dropout_keep_rate: 1
+        }
+
+        model_loss, label_pred = session.run([self.total_loss, self.predictions], feed_dict=feed_dict)
         return model_loss, label_pred
 
