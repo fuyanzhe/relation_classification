@@ -43,7 +43,6 @@ class DataLoader(object):
             self.test_pos2_single = np.load('{}/s-ins/single_test_pos2.npy'.format(data_dir))
             self.test_len_single = np.load('{}/s-ins/single_test_len.npy'.format(data_dir))
 
-
         else:
             # 单实例模型
             print 'reading training data'
@@ -89,3 +88,42 @@ class DataLoader(object):
         else:
             test_data = InputData(self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y)
             return test_data
+
+    def get_test_batches(self, batch_size, use_single=True):
+        if self.multi_ins:
+            if use_single:
+                test_order = range(len(self.test_y_single))
+                random.shuffle(test_order)
+                batch_num = int(len(test_order) / batch_size)
+                for i in range(batch_num):
+                    batch_order = test_order[i * batch_size: (i + 1) * batch_size]
+                    batch = InputData(self.test_word_single[batch_order],
+                                      self.test_pos1_single[batch_order],
+                                      self.test_pos2_single[batch_order],
+                                      self.test_len_single[batch_order],
+                                      self.test_y_single[batch_order])
+                    yield batch
+            else:
+                test_order = range(len(self.test_y))
+                random.shuffle(test_order)
+                batch_num = int(len(test_order) / batch_size)
+                for i in range(batch_num):
+                    batch_order = test_order[i * batch_size: (i + 1) * batch_size]
+                    batch = InputData(self.test_word[batch_order],
+                                      self.test_pos1[batch_order],
+                                      self.test_pos2[batch_order],
+                                      self.test_len[batch_order],
+                                      self.test_y[batch_order])
+                    yield batch
+        else:
+            test_order = range(len(self.test_y))
+            random.shuffle(test_order)
+            batch_num = int(len(test_order) / batch_size)
+            for i in range(batch_num):
+                batch_order = test_order[i * batch_size: (i + 1) * batch_size]
+                batch = InputData(self.test_word[batch_order],
+                                  self.test_pos1[batch_order],
+                                  self.test_pos2[batch_order],
+                                  self.test_len[batch_order],
+                                  self.test_y[batch_order])
+                yield batch

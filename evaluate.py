@@ -60,6 +60,7 @@ def static_cm(confusion_matrix):
 
 
 def get_p_r_f1(pred, answer):
+    assert len(pred) == len(answer)
     confusion_matrix = get_confusion_matrix(pred, answer)
     _, p_r_f1_macro, p_r_f1_micro = static_cm(confusion_matrix)
     return p_r_f1_macro

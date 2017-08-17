@@ -186,11 +186,11 @@ class RNN(object):
         with tf.name_scope('sentence_encoder'):
             # cell
             # self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, forget_bias=0.0, state_is_tuple=True)
-            self.lstm_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
-            self.lstm_cell = tf.nn.rnn_cell.DropoutWrapper(self.lstm_cell, output_keep_prob=self.dropout_keep_rate)
+            self.rnn_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
+            self.rnn_cell = tf.nn.rnn_cell.DropoutWrapper(self.rnn_cell, output_keep_prob=self.dropout_keep_rate)
 
             # rnn
-            self.outputs, self.states = tf.contrib.rnn.static_rnn(self.lstm_cell, self.emb_all_us, dtype=tf.float32)
+            self.outputs, self.states = tf.contrib.rnn.static_rnn(self.rnn_cell, self.emb_all_us, dtype=tf.float32)
 
         self.output_final = self.outputs[-1]
 
@@ -536,11 +536,11 @@ class RNN_MI(object):
         with tf.name_scope('sentence_encoder'):
             # cell
             # self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, forget_bias=0.0, state_is_tuple=True)
-            self.lstm_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
-            self.lstm_cell = tf.nn.rnn_cell.DropoutWrapper(self.lstm_cell, output_keep_prob=self.dropout_keep_rate)
+            self.rnn_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
+            self.rnn_cell = tf.nn.rnn_cell.DropoutWrapper(self.rnn_cell, output_keep_prob=self.dropout_keep_rate)
 
             # rnn
-            self.outputs, self.states = tf.contrib.rnn.static_rnn(self.lstm_cell, self.emb_all_us, dtype=tf.float32)
+            self.outputs, self.states = tf.contrib.rnn.static_rnn(self.rnn_cell, self.emb_all_us, dtype=tf.float32)
 
             self.sen_emb = self.outputs[-1]
 
@@ -553,7 +553,7 @@ class RNN_MI(object):
             self.prob = []
             self.predictions = []
             self.loss = []
-            # self.accuracy = []
+            self.accuracy = []
             self.total_loss = 0.0
 
             self.sen_a = tf.get_variable('attention_A', [self.hidden_size])
@@ -590,10 +590,10 @@ class RNN_MI(object):
                     else:
                         self.total_loss += self.loss[i]
 
-                # with tf.name_scope("accuracy"):
-                #     self.accuracy.append(
-                #         tf.reduce_mean(tf.cast(tf.equal(self.predictions[i], tf.argmax(self.input_labels[i], 0)), "float"),
-                #                        name="accuracy"))
+                with tf.name_scope("accuracy"):
+                    self.accuracy.append(
+                        tf.reduce_mean(tf.cast(tf.equal(self.predictions[i], tf.argmax(self.input_labels[i], 0)), "float"),
+                                       name="accuracy"))
 
         # optimizer
         if self.learning_rate:
@@ -628,8 +628,8 @@ class RNN_MI(object):
             self.dropout_keep_rate: dropout_keep_rate
         }
         session.run(self.optimizer, feed_dict=feed_dict)
-        model_loss = session.run(self.total_loss, feed_dict=feed_dict)
-        return model_loss
+        model_accuracy, model_loss = session.run([self.accuracy, self.total_loss], feed_dict=feed_dict)
+        return model_accuracy, model_loss
 
     def evaluate(self, session, input_data):
         total_shape = range(len(input_data.word) + 1)

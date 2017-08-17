@@ -9,7 +9,7 @@ from datetime import datetime
 
 
 def main():
-    model_name = 'birnn_att'
+    model_name = 'rnn_mi'
     train_epochs_num = 100
 
     if model_name == 'cnn':
@@ -76,7 +76,6 @@ def main():
         """
         epoch: 2, p:82.245, r:90.998, f:85.222
         """
-
         # bigru test
         data_loader = DataLoader('./data', multi_ins=False)
         print 'building {} model...'.format(model_name)
@@ -104,6 +103,9 @@ def main():
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )
     elif model_name == 'birnn_att':
+        """
+        epoch:   3, lost: 0.700, p: 80.645%, r: 91.708%, f1:84.680%
+        """
         # bigru_att test
         data_loader = DataLoader('./data', multi_ins=False)
         print 'building {} model...'.format(model_name)
@@ -131,6 +133,9 @@ def main():
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )
     elif model_name == 'rnn_mi':
+        """
+        epoch:   2, lost: 88.105, p: 82.554%, r: 91.651%, f1:85.704%
+        """
         # bigru _mi test
         data_loader = DataLoader('./data', multi_ins=True)
         batch_size = 128
@@ -141,24 +146,26 @@ def main():
 
         with tf.Session() as session:
             tf.global_variables_initializer().run()
-            _, test_data = data_loader.get_test_data()
             for epoch_num in range(train_epochs_num):
                 iter_num = 0
-                batches = data_loader.get_train_batches(batch_size=batch_size)
-                for batch in batches:
+                train_batches = data_loader.get_train_batches(batch_size=batch_size)
+                test_batches = data_loader.get_test_batches(batch_size=batch_size, use_single=True)
+                for batch in train_batches:
                     iter_num += 1
-                    loss = rnn_mi_model.fit(session, batch, dropout_keep_rate=0.5)
-                    # _, c_label = rnn_mi_model.evaluate(session, batch)
+                    acc, loss = rnn_mi_model.fit(session, batch, dropout_keep_rate=0.5)
+                    acc = np.mean(np.reshape(np.array(acc), batch_size))
                     if iter_num % 100 == 0:
-                        # p, r, f1 = get_p_r_f1(c_label, batch.y)
-                        # print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
-                        #     epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
-                        # )
-                        print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}'.format(
-                            epoch_num, iter_num, loss
+                        print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, acc: {:.3f}'.format(
+                            epoch_num, iter_num, loss, acc
                         )
-                test_loss, test_pred = rnn_mi_model.evaluate(session, test_data)
-                p, r, f1 = get_p_r_f1(test_pred, test_data.y)
+                test_loss, test_pred, test_label = [], [], []
+                for batch in test_batches:
+                    batch_loss, batch_pred = rnn_mi_model.evaluate(session, batch)
+                    test_loss.append(batch_loss)
+                    test_pred += batch_pred
+                    test_label += list(batch.y)
+                test_loss = np.mean(test_loss)
+                p, r, f1 = get_p_r_f1(test_pred, test_label)
                 print datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )
