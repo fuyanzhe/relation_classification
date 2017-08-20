@@ -4,6 +4,7 @@
 
 class CNNSetting(object):
     def __init__(self):
+        self.win_size = 3
         self.pos_num = 200
         self.pos_size = 5
         self.class_num = 31

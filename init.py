@@ -37,8 +37,17 @@ def init():
         word2id[k] = len(word2id)
         vec.append(word2vec[k])
 
-    word2id[u'UNK'] = len(word2id)
-    word2id[u'BLANK'] = len(word2id)
+    word2id[u'_UNK'] = len(word2id)
+    word2id[u'_BLANK'] = len(word2id)
+
+    with open('./data/word2id.pkl', 'wb') as f:
+        cPickle.dump(word2id, f)
+
+    id2word = {}
+    for word, id in word2id.iteritems():
+        id2word[id] = word
+    with open('./data/id2word.pkl', 'wb') as f:
+        cPickle.dump(id2word, f)
 
     dim = 50
     vec.append(np.random.normal(size=dim, loc=0, scale=0.05))
@@ -126,7 +135,7 @@ def init():
             output = []
             # get relative position
             for i in range(fixlen):
-                word = word2id[u'BLANK']
+                word = word2id[u'_BLANK']
                 rel_e1 = pos_embed(i - en1pos, maxlen)
                 rel_e2 = pos_embed(i - en2pos, maxlen)
                 output.append([word, rel_e1, rel_e2])
@@ -134,7 +143,7 @@ def init():
             # translate the words in sentences to index
             for i in range(min(fixlen, len(sentence))):
                 if sentence[i].decode('utf8') not in word2id:
-                    word = word2id[u'UNK']
+                    word = word2id[u'_UNK']
                 else:
                     word = word2id[sentence[i].decode('utf8')]
                 output[i][0] = word
@@ -211,14 +220,14 @@ def init():
             output = []
             # pos feature
             for i in range(fixlen):
-                word = word2id[u'BLANK']
+                word = word2id[u'_BLANK']
                 rel_e1 = pos_embed(i - en1pos, maxlen)
                 rel_e2 = pos_embed(i - en2pos, maxlen)
                 output.append([word, rel_e1, rel_e2])
 
             for i in range(min(fixlen, len(sentence))):
                 if sentence[i].decode('utf8') not in word2id:
-                    word = word2id[u'UNK']
+                    word = word2id[u'_UNK']
                 else:
                     word = word2id[sentence[i].decode('utf8')]
 
@@ -232,6 +241,7 @@ def init():
             test_sen_pos1_all.append(sen_p1)
             test_sen_pos2_all.append(sen_p2)
             test_sen_len_all.append(sen_len)
+
             # multi-instance
             test_sen[tup].append(output)
             test_sen_len[tup].append(sen_len)
@@ -239,17 +249,17 @@ def init():
     data_test.close()
 
     # single-instance
-    np.save('./data/s-ins/single_train_word.npy', np.array(train_sen_all))
-    np.save('./data/s-ins/single_train_pos1.npy', np.array(train_sen_pos1_all))
-    np.save('./data/s-ins/single_train_pos2.npy', np.array(train_sen_pos2_all))
-    np.save('./data/s-ins/single_train_len.npy', np.array(train_sen_len_all))
-    np.save('./data/s-ins/single_train_y.npy', np.array(train_label_all))
+    np.save('./data/s-ins/train_word.npy', np.array(train_sen_all))
+    np.save('./data/s-ins/train_pos1.npy', np.array(train_sen_pos1_all))
+    np.save('./data/s-ins/train_pos2.npy', np.array(train_sen_pos2_all))
+    np.save('./data/s-ins/train_len.npy', np.array(train_sen_len_all))
+    np.save('./data/s-ins/train_y.npy', np.array(train_label_all))
 
-    np.save('./data/s-ins/single_test_word.npy', np.array(test_sen_all))
-    np.save('./data/s-ins/single_test_pos1.npy', np.array(test_sen_pos1_all))
-    np.save('./data/s-ins/single_test_pos2.npy', np.array(test_sen_pos2_all))
-    np.save('./data/s-ins/single_test_len.npy', np.array(test_sen_len_all))
-    np.save('./data/s-ins/single_test_y.npy', np.array(test_label_all))
+    np.save('./data/s-ins/test_word.npy', np.array(test_sen_all))
+    np.save('./data/s-ins/test_pos1.npy', np.array(test_sen_pos1_all))
+    np.save('./data/s-ins/test_pos2.npy', np.array(test_sen_pos2_all))
+    np.save('./data/s-ins/test_len.npy', np.array(test_sen_len_all))
+    np.save('./data/s-ins/test_y.npy', np.array(test_label_all))
 
     # multi-instance
     train_x = []
@@ -473,148 +483,6 @@ def seperate():
         np.save('./data/m-ins/{}_test_pos2.npy'.format(pn), test_pos2)
 
 
-def getsmall():
-    print 'reading training data'
-    word = np.load('./data/m-ins/train_word.npy')
-    pos1 = np.load('./data/m-ins/train_pos1.npy')
-    pos2 = np.load('./data/m-ins/train_pos2.npy')
-    slen = np.load('./data/m-ins/train_len.npy')
-    y = np.load('./data/m-ins/train_y.npy')
-
-    new_word = []
-    new_pos1 = []
-    new_pos2 = []
-    new_slen = []
-    new_y = []
-
-    # we slice some big batch in train data into small batches in case of running out of memory
-    print 'get small training data'
-    c0, c1, c2, c3, c4 = 0, 0, 0, 0, 0
-    for i in range(len(word)):
-        lenth = len(word[i])
-        if lenth <= 1000:
-            c0 += 1
-            new_word.append(word[i])
-            new_pos1.append(pos1[i])
-            new_pos2.append(pos2[i])
-            new_slen.append(slen[i])
-            new_y.append(y[i])
-
-        if 1000 < lenth < 2000:
-            c1 += 1
-            new_word.append(word[i][:1000])
-            new_word.append(word[i][1000:])
-
-            new_pos1.append(pos1[i][:1000])
-            new_pos1.append(pos1[i][1000:])
-
-            new_pos2.append(pos2[i][:1000])
-            new_pos2.append(pos2[i][1000:])
-
-            new_slen.append(slen[i][:1000])
-            new_slen.append(slen[i][1000:])
-
-            new_y.append(y[i])
-            new_y.append(y[i])
-
-        if 2000 < lenth < 3000:
-            c1 += 1
-            new_word.append(word[i][:1000])
-            new_word.append(word[i][1000:2000])
-            new_word.append(word[i][2000:])
-
-            new_pos1.append(pos1[i][:1000])
-            new_pos1.append(pos1[i][1000:2000])
-            new_pos1.append(pos1[i][2000:])
-
-            new_pos2.append(pos2[i][:1000])
-            new_pos2.append(pos2[i][1000:2000])
-            new_pos2.append(pos2[i][2000:])
-
-            new_slen.append(slen[i][:1000])
-            new_slen.append(slen[i][1000:2000])
-            new_slen.append(slen[i][2000:])
-
-            new_y.append(y[i])
-            new_y.append(y[i])
-            new_y.append(y[i])
-
-        if 3000 < lenth < 4000:
-            c1 += 1
-            new_word.append(word[i][:1000])
-            new_word.append(word[i][1000:2000])
-            new_word.append(word[i][2000:3000])
-            new_word.append(word[i][3000:])
-
-            new_pos1.append(pos1[i][:1000])
-            new_pos1.append(pos1[i][1000:2000])
-            new_pos1.append(pos1[i][2000:3000])
-            new_pos1.append(pos1[i][3000:])
-
-            new_pos2.append(pos2[i][:1000])
-            new_pos2.append(pos2[i][1000:2000])
-            new_pos2.append(pos2[i][2000:3000])
-            new_pos2.append(pos2[i][3000:])
-
-            new_slen.append(slen[i][:1000])
-            new_slen.append(slen[i][1000:2000])
-            new_slen.append(slen[i][2000:3000])
-            new_slen.append(slen[i][3000:])
-
-            new_y.append(y[i])
-            new_y.append(y[i])
-            new_y.append(y[i])
-            new_y.append(y[i])
-
-        if lenth > 4000:
-            c1 += 1
-            new_word.append(word[i][:1000])
-            new_word.append(word[i][1000:2000])
-            new_word.append(word[i][2000:3000])
-            new_word.append(word[i][3000:4000])
-            new_word.append(word[i][4000:])
-
-            new_pos1.append(pos1[i][:1000])
-            new_pos1.append(pos1[i][1000:2000])
-            new_pos1.append(pos1[i][2000:3000])
-            new_pos1.append(pos1[i][3000:4000])
-            new_pos1.append(pos1[i][4000:])
-
-            new_pos2.append(pos2[i][:1000])
-            new_pos2.append(pos2[i][1000:2000])
-            new_pos2.append(pos2[i][2000:3000])
-            new_pos2.append(pos2[i][3000:4000])
-            new_pos2.append(pos2[i][4000:])
-
-            new_slen.append(slen[i][:1000])
-            new_slen.append(slen[i][1000:2000])
-            new_slen.append(slen[i][2000:3000])
-            new_slen.append(slen[i][3000:4000])
-            new_slen.append(slen[i][4000:])
-
-            new_y.append(y[i])
-            new_y.append(y[i])
-            new_y.append(y[i])
-            new_y.append(y[i])
-            new_y.append(y[i])
-
-    new_word = np.array(new_word)
-    new_pos1 = np.array(new_pos1)
-    new_pos2 = np.array(new_pos2)
-    new_slen = np.array(new_slen)
-    new_y = np.array(new_y)
-
-    np.save('./data/m-ins/small_word.npy', new_word)
-    np.save('./data/m-ins/small_pos1.npy', new_pos1)
-    np.save('./data/m-ins/small_pos2.npy', new_pos2)
-    np.save('./data/m-ins/small_len.npy', new_slen)
-    np.save('./data/m-ins/small_y.npy', new_y)
-
-    print '0-1000:{}, 1000-2000:{}, 2000-3000:{}, 3000-4000:{}, 4000<:{}'.format(
-        c0, c1, c2, c3, c4
-    )
-
-
 # get answer metric for PR curve evaluation
 def getans():
     test_y = np.load('./data/m-ins/testall_y.npy')
@@ -628,15 +496,13 @@ def getans():
 def get_metadata():
     with open('./origin_data/vectors/word_vec_50.pkl', 'rb') as f:
         word2vec = cPickle.load(f)
-    fwrite = open('./data/metadata.tsv', 'wb')
-    for k in sorted(word2vec.keys()):
-        fwrite.write(k.encode('utf8') + '\n')
-    fwrite.close()
+    with open('./data/metadata.tsv', 'wb') as fwrite:
+        for k in sorted(word2vec.keys()):
+            fwrite.write(k.encode('utf8') + '\n')
 
 
 if __name__ == '__main__':
     init()
     seperate()
-    getsmall()
     getans()
     get_metadata()

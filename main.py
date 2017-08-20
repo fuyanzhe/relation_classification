@@ -1,6 +1,7 @@
 # -*- encoding: utf-8 -*-
 # Created by han on 17-7-8
 
+import cPickle
 from data_loader import DataLoader
 from model_settings import *
 from models import *
@@ -9,17 +10,20 @@ from datetime import datetime
 
 
 def main():
-    model_name = 'rnn_mi'
+    model_name = 'cnn'
     train_epochs_num = 100
+
+    with open('./data/id2word.pkl', 'wb') as f:
+        id2word = cPickle.load(f)
 
     if model_name == 'cnn':
         """
         epoch:   6, lost: 0.614, p: 81.678%, r: 89.788%, f1:84.531%
         """
         # cnn test
-        data_loader = DataLoader('./data', multi_ins=False)
-        print 'building {} model...'.format(model_name)
         cnn_setting = CNNSetting()
+        data_loader = DataLoader('./data', multi_ins=False, cnn_win_size=cnn_setting.win_size)
+        print 'building {} model...'.format(model_name)
         cnn_model = CNN(data_loader.wordembedding, cnn_setting)
 
         with tf.Session() as session:
@@ -33,12 +37,13 @@ def main():
                     loss = cnn_model.fit(session, batch, dropout_keep_rate=0.5)
                     _, c_label = cnn_model.evaluate(session, batch)
                     if iter_num % 100 == 0:
-                        p, r, f1 = get_p_r_f1(c_label, batch.y)
+                        p, r, f1 = get_p_r_f1(c_label, batch.y, neg_label=False)
                         print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                             epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
                         )
                 test_loss, test_pred = cnn_model.evaluate(session, test_data)
-                p, r, f1 = get_p_r_f1(test_pred, test_data.y)
+                p, r, f1 = get_p_r_f1(test_pred, test_data.y, neg_label=False)
+
                 print datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )

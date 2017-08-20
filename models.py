@@ -18,6 +18,8 @@ class CNN(object):
         self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [setting.pos_num, setting.pos_size])
         self.embed_size_pos = setting.pos_size
 
+        # window size
+        self.window_size = setting.win_size
         # max sentence length
         self.max_sentence_len = setting.sent_len
 
@@ -29,7 +31,7 @@ class CNN(object):
         self.class_num = setting.class_num
 
         # inputs
-        self.input_words = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_words')
+        self.input_words = tf.placeholder(tf.int32, [None, self.max_sentence_len, self.window_size], name='input_words')
         self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
 
         # position feature
@@ -43,7 +45,10 @@ class CNN(object):
         self.learning_rate = setting.learning_rate
 
         # embedded
-        self.emb_word = tf.nn.embedding_lookup(self.embed_matrix_word, self.input_words)
+        self.emb_word = tf.reshape(
+            tf.nn.embedding_lookup(self.embed_matrix_word, self.input_words),
+            [-1, self.max_sentence_len, self.window_size * self.embed_size_word]
+        )
         self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
         self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
 
@@ -91,7 +96,7 @@ class CNN(object):
             with tf.name_scope('conv-maxpool-%s' % filter_size):
                 # convolution layer
                 filter_shape = [
-                    filter_size, self.embed_size_word + 2 * self.embed_size_pos, 1, self.filter_num
+                    filter_size, self.embed_size_word * self.window_size + 2 * self.embed_size_pos, 1, self.filter_num
                 ]
 
                 w = tf.get_variable('W', filter_shape, initializer=tf.truncated_normal_initializer(stddev=0.1))

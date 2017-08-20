@@ -21,7 +21,7 @@ def get_confusion_matrix(pred, answer):
     return confusion_matrix
 
 
-def static_cm(confusion_matrix):
+def static_cm(confusion_matrix, neg_label=True):
     """
     get prf of each relation, calculate Macro-average prf and Micro-average prf
     """
@@ -29,6 +29,8 @@ def static_cm(confusion_matrix):
     rel_num = confusion_matrix.shape[0]
     tp_all, tp_fn_all, tp_fp_all = 0, 0, 0
     for i in range(rel_num):
+        if (not neg_label) and i == 0:
+            continue
         tp_fp = sum(confusion_matrix[:, i])
         tp_fn = sum(confusion_matrix[i, :])
         tp = confusion_matrix[i, i]
@@ -59,11 +61,13 @@ def static_cm(confusion_matrix):
     return static_res, p_r_f1_macro, p_r_f1_micro
 
 
-def get_p_r_f1(pred, answer):
+def get_p_r_f1(pred, answer, neg_label=True):
     assert len(pred) == len(answer)
     confusion_matrix = get_confusion_matrix(pred, answer)
-    _, p_r_f1_macro, p_r_f1_micro = static_cm(confusion_matrix)
+    _, p_r_f1_macro, p_r_f1_micro = static_cm(confusion_matrix, neg_label)
     return p_r_f1_macro
+
+def show_wrong_ins(pred, answer, data_word, word2id)
 
 
 def get_pr_curve(res_list):
@@ -142,22 +146,3 @@ def get_pr_curve_bag(res_list):
             if (i + 1) % 100 == 0:
                 print "p: %f, r: %f" % (float(correct) / float(i + 1), float(correct) / float(tot))
         return pr_list
-
-
-if __name__ == '__main__':
-    # test = [((1, 1), [0, 1, 0], {1}), ((2, 2), [1, 0, 0], {0}), ((3, 3), [0, 1, 0], {1}), ((4, 4), [0, 1, 0], {1, 2}),
-    #         ((5, 5), [0, 0, 1], {0, 2}), ((6, 6), [0, 1, 0], {0}), ((7, 7), [0, 0, 1], {1})]
-    test = [([0, 1, 0], 1), ([1, 0, 0], 0), ([0, 1, 0], 1), ([0, 1, 0], 2),
-            ([0, 0, 1], 2), ([0, 1, 0], 0), ([0, 0, 1], 1)]
-    # counter_w, counter_r = 0., 0.
-    # for i in test:
-    #     if i[0] == i[1].index(1):
-    #         counter_r += 1
-    #     else:
-    #         counter_w += 1
-    # print 'accuracy: {:.4}%'.format(float(counter_r) / float(counter_w + counter_r))
-    # test_pred = [i[0] for i in test]
-    # test_answer = [i[1] for i in test]
-    # print get_p_r_f1(test_answer, test_pred)
-    pr_list = get_pr_curve_bag(test)
-    print pr_list
