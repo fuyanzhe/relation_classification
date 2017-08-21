@@ -1,147 +1,103 @@
 # -*- encoding: utf-8 -*-
 # Created by han on 17-7-8
 
+import os
 import cPickle
+from datetime import datetime
 from data_loader import DataLoader
 from model_settings import *
 from models import *
 from evaluate import *
-from datetime import datetime
+
+ms_dict = {
+    'cnn': CNNSetting,
+    'rnn': RNNSetting,
+    'rnn_mi': RNNMiSetting
+}
+m_dict = {
+    'cnn': CNN,
+    'rnn': RNN,
+    'birnn': BiRNN,
+    'birnn_att': BiRNN_ATT,
+    'rnn_mi': RNN_MI
+}
 
 
 def main():
-    model_name = 'cnn'
+    model_name = 'rnn'
     train_epochs_num = 100
+    batch_size = 128
 
-    with open('./data/id2word.pkl', 'wb') as f:
+    with open('./data/id2word.pkl', 'rb') as f:
         id2word = cPickle.load(f)
+    with open('./data/word2id.pkl', 'rb') as f:
+        word2id = cPickle.load(f)
+    with open('./origin_data/idx2rel.pkl', 'rb') as f:
+        id2rel = cPickle.load(f)
 
-    if model_name == 'cnn':
-        """
-        epoch:   6, lost: 0.614, p: 81.678%, r: 89.788%, f1:84.531%
-        """
-        # cnn test
-        cnn_setting = CNNSetting()
-        data_loader = DataLoader('./data', multi_ins=False, cnn_win_size=cnn_setting.win_size)
-        print 'building {} model...'.format(model_name)
-        cnn_model = CNN(data_loader.wordembedding, cnn_setting)
+    res_path = os.path.join('./result', model_name)
+    if not os.path.exists(res_path):
+        os.makedirs(res_path)
+    res_prf = os.path.join(res_path, 'prf.txt')
+    res_ana = os.path.join(res_path, 'analysis.txt')
+    log_prf = tf.gfile.GFile(res_prf, mode='a')
+    log_ana = tf.gfile.GFile(res_ana, mode='a')
 
+    best_f1 = 0
+    if '_mi' not in model_name:
+        if 'cnn' in model_name:
+            model_setting = ms_dict['cnn']()
+            data_loader = DataLoader('./data', multi_ins=False, cnn_win_size=model_setting.win_size)
+        else:
+            model_setting = ms_dict['rnn']()
+            data_loader = DataLoader('./data', multi_ins=False)
+        model = m_dict[model_name](data_loader.wordembedding, model_setting)
         with tf.Session() as session:
             tf.global_variables_initializer().run()
             test_data = data_loader.get_test_data()
             for epoch_num in range(train_epochs_num):
                 iter_num = 0
-                batches = data_loader.get_train_batches(batch_size=128)
+                batches = data_loader.get_train_batches(batch_size=batch_size)
                 for batch in batches:
                     iter_num += 1
-                    loss = cnn_model.fit(session, batch, dropout_keep_rate=0.5)
-                    _, c_label = cnn_model.evaluate(session, batch)
+                    loss = model.fit(session, batch, dropout_keep_rate=0.5)
+                    _, c_label = model.evaluate(session, batch)
                     if iter_num % 100 == 0:
-                        p, r, f1 = get_p_r_f1(c_label, batch.y, neg_label=False)
-                        print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
+                        _, prf_macro, _ = get_p_r_f1(c_label, batch.y)
+                        p, r, f1 = prf_macro
+                        log_info = str(datetime.now()) + 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, ' \
+                                                         'r: {:.3f}%, f1:{:.3f}%\n'.format(
                             epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
                         )
-                test_loss, test_pred = cnn_model.evaluate(session, test_data)
-                p, r, f1 = get_p_r_f1(test_pred, test_data.y, neg_label=False)
+                        log_prf.write(log_info)
+                        print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, ' \
+                                              'f1:{:.3f}%'.format(
+                            epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
+                        )
+                # test data
+                test_loss, test_pred = model.evaluate(session, test_data)
+                prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_data.y)
+                p, r, f1 = prf_macro
+                log_info = str(datetime.now()) + ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%,' \
+                                                 ' f1:{:.3f}%\n'.format(
+                    epoch_num, test_loss, p * 100, r * 100, f1 * 100
+                )
+                if f1 > best_f1:
+                    best_f1 = f1
+                    log_ana.write(log_info)
+                    wrong_ins = get_wrong_ins(test_pred, test_data, word2id, id2word, id2rel)
+                    wrong_ins = sorted(wrong_ins, key=lambda x: x[1])
+                    wrong_ins = ['\t'.join(i) + '\n' for i in wrong_ins]
+                    for ins in wrong_ins:
+                        log_ana.write(ins)
+                    log_ana.write('-' * 80 + '\n')
 
+                log_prf.write(log_info)
                 print datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )
-    elif model_name == 'rnn':
-        """
-        epoch:   2, lost: 0.619, p: 81.377%, r: 90.501%, f1:84.603%
-        """
-        # rnn test
-        data_loader = DataLoader('./data', multi_ins=False)
-        print 'building {} model...'.format(model_name)
-        rnn_setting = RNNSetting()
-        rnn_model = RNN(data_loader.wordembedding, rnn_setting)
-
-        with tf.Session() as session:
-            tf.global_variables_initializer().run()
-            test_data = data_loader.get_test_data()
-            for epoch_num in range(train_epochs_num):
-                iter_num = 0
-                batches = data_loader.get_train_batches(batch_size=128)
-                for batch in batches:
-                    iter_num += 1
-                    loss = rnn_model.fit(session, batch, dropout_keep_rate=0.5)
-                    _, c_label = rnn_model.evaluate(session, batch)
-                    if iter_num % 100 == 0:
-                        p, r, f1 = get_p_r_f1(c_label, batch.y)
-                        print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
-                            epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
-                        )
-                test_loss, test_pred = rnn_model.evaluate(session, test_data)
-                p, r, f1 = get_p_r_f1(test_pred, test_data.y)
-                print datetime.now(), ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
-                    epoch_num, test_loss, p * 100, r * 100, f1 * 100
-                )
-    elif model_name == 'birnn':
-        """
-        epoch: 2, p:82.245, r:90.998, f:85.222
-        """
-        # bigru test
-        data_loader = DataLoader('./data', multi_ins=False)
-        print 'building {} model...'.format(model_name)
-        birnn_setting = RNNSetting()
-        birnn_model = BiRNN(data_loader.wordembedding, birnn_setting)
-
-        with tf.Session() as session:
-            tf.global_variables_initializer().run()
-            test_data = data_loader.get_test_data()
-            for epoch_num in range(train_epochs_num):
-                iter_num = 0
-                batches = data_loader.get_train_batches(batch_size=128)
-                for batch in batches:
-                    iter_num += 1
-                    loss = birnn_model.fit(session, batch, dropout_keep_rate=0.5)
-                    _, c_label = birnn_model.evaluate(session, batch)
-                    if iter_num % 100 == 0:
-                        p, r, f1 = get_p_r_f1(c_label, batch.y)
-                        print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
-                            epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
-                        )
-                test_loss, test_pred = birnn_model.evaluate(session, test_data)
-                p, r, f1 = get_p_r_f1(test_pred, test_data.y)
-                print datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
-                    epoch_num, test_loss, p * 100, r * 100, f1 * 100
-                )
-    elif model_name == 'birnn_att':
-        """
-        epoch:   3, lost: 0.700, p: 80.645%, r: 91.708%, f1:84.680%
-        """
-        # bigru_att test
-        data_loader = DataLoader('./data', multi_ins=False)
-        print 'building {} model...'.format(model_name)
-        rnn_att_setting = RNNSetting()
-        rnn_att_model = BiRNN_ATT(data_loader.wordembedding, rnn_att_setting)
-
-        with tf.Session() as session:
-            tf.global_variables_initializer().run()
-            test_data = data_loader.get_test_data()
-            for epoch_num in range(train_epochs_num):
-                iter_num = 0
-                batches = data_loader.get_train_batches(batch_size=128)
-                for batch in batches:
-                    iter_num += 1
-                    loss = rnn_att_model.fit(session, batch, dropout_keep_rate=0.5)
-                    _, c_label = rnn_att_model.evaluate(session, batch)
-                    if iter_num % 100 == 0:
-                        p, r, f1 = get_p_r_f1(c_label, batch.y)
-                        print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
-                            epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
-                        )
-                test_loss, test_pred = rnn_att_model.evaluate(session, test_data)
-                p, r, f1 = get_p_r_f1(test_pred, test_data.y)
-                print datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
-                    epoch_num, test_loss, p * 100, r * 100, f1 * 100
-                )
-    elif model_name == 'rnn_mi':
-        """
-        epoch:   2, lost: 88.105, p: 82.554%, r: 91.651%, f1:85.704%
-        """
-        # bigru _mi test
+    else:
+        # birnn_mi test
         data_loader = DataLoader('./data', multi_ins=True)
         batch_size = 128
         print 'building {} model...'.format(model_name)
@@ -170,7 +126,8 @@ def main():
                     test_pred += batch_pred
                     test_label += list(batch.y)
                 test_loss = np.mean(test_loss)
-                p, r, f1 = get_p_r_f1(test_pred, test_label)
+                prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_label.y)
+                p, r, f1 = prf_macro
                 print datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )

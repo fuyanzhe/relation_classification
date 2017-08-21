@@ -12,6 +12,7 @@ class CNNSetting(object):
         self.filter_sizes = [3]
         self.filter_num = 200
         self.learning_rate = None
+        self.dropout_rate = 0.5
 
 
 class RNNSetting(object):
@@ -23,6 +24,7 @@ class RNNSetting(object):
         self.hidden_size = 100
         self.layers = 1
         self.learning_rate = None
+        self.dropout_rate = 0.5
 
 
 class RNNMiSetting(object):
@@ -34,4 +36,5 @@ class RNNMiSetting(object):
         self.hidden_size = 100
         self.layers = 1
         self.learning_rate = None
+        self.dropout_rate = 0.5
         self.bag_num = None

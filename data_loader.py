@@ -15,7 +15,7 @@ class InputData(object):
 
 
 class DataLoader(object):
-    def __init__(self, data_dir, multi_ins=True, cnn_win_size=0):
+    def __init__(self, data_dir, multi_ins=False, cnn_win_size=0):
         self.multi_ins = multi_ins
 
         print 'reading embeddings'
@@ -36,12 +36,6 @@ class DataLoader(object):
             self.test_pos1 = np.load('{}/m-ins/testall_pos1.npy'.format(data_dir))
             self.test_pos2 = np.load('{}/m-ins/testall_pos2.npy'.format(data_dir))
             self.test_len = np.load('{}/m-ins/testall_len.npy'.format(data_dir))
-
-            # self.test_y = np.load('{}/m-ins/pall_test_y.npy'.format(data_dir))
-            # self.test_word = np.load('{}/m-ins/pall_test_word.npy'.format(data_dir))
-            # self.test_pos1 = np.load('{}/m-ins/pall_test_pos1.npy'.format(data_dir))
-            # self.test_pos2 = np.load('{}/m-ins/pall_test_pos2.npy'.format(data_dir))
-            # self.test_len = np.load('{}/m-ins/pall_test_len.npy'.format(data_dir))
 
             print 'reading single testing data'
             self.test_y_single = np.load('{}/s-ins/test_y.npy'.format(data_dir))

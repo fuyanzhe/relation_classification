@@ -64,10 +64,33 @@ def static_cm(confusion_matrix, neg_label=True):
 def get_p_r_f1(pred, answer, neg_label=True):
     assert len(pred) == len(answer)
     confusion_matrix = get_confusion_matrix(pred, answer)
-    _, p_r_f1_macro, p_r_f1_micro = static_cm(confusion_matrix, neg_label)
-    return p_r_f1_macro
+    p_r_f1_list, p_r_f1_macro, p_r_f1_micro = static_cm(confusion_matrix, neg_label)
+    return p_r_f1_list, p_r_f1_macro, p_r_f1_micro
 
-def show_wrong_ins(pred, answer, data_word, word2id)
+
+def get_wrong_ins(pred, test_data, word2id, id2word, id2rel):
+    assert len(pred) == len(test_data)
+    pred = np.array(pred)
+    answer = np.array([np.argmax(i) for i in test_data.y])
+    wrong_labeled_ins = test_data.word[pred != answer]
+    wrong_labeled_lab = answer[pred != answer]
+    wrong_labeled_pre = pred[pred != answer]
+    blank_id = word2id['_BLANK']
+    wrong_ins = []
+    wrong_labeled_pos1 = test_data.pos1[pred != answer]
+    wrong_labeled_pos1 = wrong_labeled_pos1[:, 1]
+    pos1 - 91
+
+    for ins in wrong_labeled_ins:
+        ins = ins[ins != blank_id]
+        sen = []
+        for id in ins:
+            sen.append(id2word[id].encode('utf8'))
+        wrong_ins.append(''.join(sen))
+    wrong_labeled_lab = [id2rel[i] for i in wrong_labeled_lab]
+    wrong_labeled_pre = [id2rel[i] for i in wrong_labeled_pre]
+    wrong_labeled = zip(wrong_labeled_lab, wrong_labeled_pre, wrong_ins)
+    return wrong_labeled
 
 
 def get_pr_curve(res_list):
