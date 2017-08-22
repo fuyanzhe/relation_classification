@@ -21,7 +21,7 @@ def get_confusion_matrix(pred, answer):
     return confusion_matrix
 
 
-def static_cm(confusion_matrix, neg_label=True):
+def static_cm(confusion_matrix, use_neg=True):
     """
     get prf of each relation, calculate Macro-average prf and Micro-average prf
     """
@@ -29,7 +29,7 @@ def static_cm(confusion_matrix, neg_label=True):
     rel_num = confusion_matrix.shape[0]
     tp_all, tp_fn_all, tp_fp_all = 0, 0, 0
     for i in range(rel_num):
-        if (not neg_label) and i == 0:
+        if (not use_neg) and i == 0:
             continue
         tp_fp = sum(confusion_matrix[:, i])
         tp_fn = sum(confusion_matrix[i, :])
@@ -53,43 +53,58 @@ def static_cm(confusion_matrix, neg_label=True):
         p_r_f1_macro[x] /= contain_rel_num
 
     # Micro-average
-    p_all = tp_all /tp_fp_all
-    r_all = tp_all/ tp_fn_all
+    p_all = tp_all / tp_fp_all
+    r_all = tp_all / tp_fn_all
     f1_all = (2 * p_all * r_all) / (p_all + r_all)
     p_r_f1_micro = [p_all, r_all, f1_all]
 
     return static_res, p_r_f1_macro, p_r_f1_micro
 
 
-def get_p_r_f1(pred, answer, neg_label=True):
+def get_p_r_f1(pred, answer, use_neg=True):
     assert len(pred) == len(answer)
     confusion_matrix = get_confusion_matrix(pred, answer)
-    p_r_f1_list, p_r_f1_macro, p_r_f1_micro = static_cm(confusion_matrix, neg_label)
+    p_r_f1_list, p_r_f1_macro, p_r_f1_micro = static_cm(confusion_matrix, use_neg)
     return p_r_f1_list, p_r_f1_macro, p_r_f1_micro
 
 
-def get_wrong_ins(pred, test_data, word2id, id2word, id2rel):
-    assert len(pred) == len(test_data)
+def get_wrong_ins(pred, test_data, word2id, id2word, id2rel, use_neg=True):
+    assert len(pred) == len(test_data.y)
     pred = np.array(pred)
     answer = np.array([np.argmax(i) for i in test_data.y])
     wrong_labeled_ins = test_data.word[pred != answer]
     wrong_labeled_lab = answer[pred != answer]
     wrong_labeled_pre = pred[pred != answer]
-    blank_id = word2id['_BLANK']
-    wrong_ins = []
+    # e1 pos
     wrong_labeled_pos1 = test_data.pos1[pred != answer]
-    wrong_labeled_pos1 = wrong_labeled_pos1[:, 1]
-    pos1 - 91
+    wrong_labeled_pos1 = wrong_labeled_pos1[:, 0]
+    wrong_labeled_e1p = 91 - wrong_labeled_pos1
+    # e2 pos
+    wrong_labeled_pos2 = test_data.pos2[pred != answer]
+    wrong_labeled_pos2 = wrong_labeled_pos2[:, 0]
+    wrong_labeled_e2p = 91 - wrong_labeled_pos2
 
-    for ins in wrong_labeled_ins:
-        ins = ins[ins != blank_id]
-        sen = []
-        for id in ins:
-            sen.append(id2word[id].encode('utf8'))
-        wrong_ins.append(''.join(sen))
-    wrong_labeled_lab = [id2rel[i] for i in wrong_labeled_lab]
-    wrong_labeled_pre = [id2rel[i] for i in wrong_labeled_pre]
-    wrong_labeled = zip(wrong_labeled_lab, wrong_labeled_pre, wrong_ins)
+    wrong_ins = []
+    wrong_ins_e1 = []
+    wrong_ins_e2 = []
+    wrong_ins_lab = []
+    wrong_ins_pre = []
+
+    blank_id = word2id['_BLANK']
+    for idx in range(len(wrong_labeled_ins)):
+        if (not use_neg) and wrong_labeled_lab[idx] == 0:
+            continue
+        else:
+            ins = wrong_labeled_ins[idx][wrong_labeled_ins[idx] != blank_id]
+            sen = []
+            for id in ins:
+                sen.append(id2word[id].encode('utf8'))
+            wrong_ins.append(''.join(sen))
+            wrong_ins_e1.append(id2word[wrong_labeled_ins[idx][wrong_labeled_e1p[idx]]].encode('utf8'))
+            wrong_ins_e2.append(id2word[wrong_labeled_ins[idx][wrong_labeled_e2p[idx]]].encode('utf8'))
+            wrong_ins_lab.append(id2rel[wrong_labeled_lab[idx]])
+            wrong_ins_pre.append(id2rel[wrong_labeled_pre[idx]])
+    wrong_labeled = zip(wrong_ins_lab, wrong_ins_pre, wrong_ins_e1, wrong_ins_e2, wrong_ins)
     return wrong_labeled
 
 
@@ -109,7 +124,7 @@ def get_pr_curve(res_list):
             prob_rel_list.append((res_list[i][0][j], res_list[i][1][j]))
     sorted_list = sorted(prob_rel_list, reverse=True)
     for i in range(2000):
-        correct = sum([j[1] for j in sorted_list[:(i+1)]])
+        correct = sum([j[1] for j in sorted_list[:(i + 1)]])
         pr_list.append((float(correct) / float(i + 1), float(correct) / float(tot)))
         if (i + 1) % 100 == 0:
             print "p: %f, r: %f" % (float(correct) / float(i + 1), float(correct) / float(tot))

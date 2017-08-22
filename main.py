@@ -12,6 +12,8 @@ from evaluate import *
 ms_dict = {
     'cnn': CNNSetting,
     'rnn': RNNSetting,
+    'birnn': RNNSetting,
+    'birnn_att': RNNSetting,
     'rnn_mi': RNNMiSetting
 }
 m_dict = {
@@ -24,7 +26,7 @@ m_dict = {
 
 
 def main():
-    model_name = 'rnn'
+    model_name = 'birnn'
     train_epochs_num = 100
     batch_size = 128
 
@@ -45,55 +47,70 @@ def main():
 
     best_f1 = 0
     if '_mi' not in model_name:
+        model_setting = ms_dict[model_name]()
         if 'cnn' in model_name:
-            model_setting = ms_dict['cnn']()
             data_loader = DataLoader('./data', multi_ins=False, cnn_win_size=model_setting.win_size)
         else:
-            model_setting = ms_dict['rnn']()
             data_loader = DataLoader('./data', multi_ins=False)
         model = m_dict[model_name](data_loader.wordembedding, model_setting)
         with tf.Session() as session:
             tf.global_variables_initializer().run()
+            saver = tf.train.Saver(max_to_keep=None)
             test_data = data_loader.get_test_data()
             for epoch_num in range(train_epochs_num):
+                # train
                 iter_num = 0
                 batches = data_loader.get_train_batches(batch_size=batch_size)
                 for batch in batches:
                     iter_num += 1
-                    loss = model.fit(session, batch, dropout_keep_rate=0.5)
+                    loss = model.fit(session, batch, dropout_keep_rate=model_setting.dropout_rate)
                     _, c_label = model.evaluate(session, batch)
                     if iter_num % 100 == 0:
                         _, prf_macro, _ = get_p_r_f1(c_label, batch.y)
                         p, r, f1 = prf_macro
-                        log_info = str(datetime.now()) + 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, ' \
-                                                         'r: {:.3f}%, f1:{:.3f}%\n'.format(
+                        log_info = 'train: ' + str(datetime.now()) + 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, ' \
+                                                                     'p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
                             epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
                         )
                         log_prf.write(log_info)
-                        print datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, ' \
-                                              'f1:{:.3f}%'.format(
+                        print 'train: ', datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, ' \
+                                                         'r: {:.3f}%, f1:{:.3f}%'.format(
                             epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
                         )
-                # test data
+                # test
+                use_neg = False
                 test_loss, test_pred = model.evaluate(session, test_data)
-                prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_data.y)
+                prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_data.y, use_neg)
                 p, r, f1 = prf_macro
-                log_info = str(datetime.now()) + ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%,' \
-                                                 ' f1:{:.3f}%\n'.format(
+                log_info = 'test: ' + str(datetime.now()) + ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%,' \
+                                                            ' f1:{:.3f}%\n'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )
                 if f1 > best_f1:
                     best_f1 = f1
                     log_ana.write(log_info)
-                    wrong_ins = get_wrong_ins(test_pred, test_data, word2id, id2word, id2rel)
+                    if use_neg:
+                        for id in range(len(prf_list)):
+                            rel_prf = 'rel: {}_{}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
+                                id, id2rel[id], prf_list[id][3] * 100, prf_list[id][4] * 100, prf_list[id][5] * 100
+                            )
+                            log_ana.write(rel_prf)
+                    else:
+                        for id in range(len(prf_list)):
+                            rel_prf = 'rel: {}_{}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
+                                id+1, id2rel[id+1], prf_list[id][3] * 100, prf_list[id][4] * 100, prf_list[id][5] * 100
+                            )
+                            log_ana.write(rel_prf)
+                    wrong_ins = get_wrong_ins(test_pred, test_data, word2id, id2word, id2rel, use_neg)
                     wrong_ins = sorted(wrong_ins, key=lambda x: x[1])
                     wrong_ins = ['\t'.join(i) + '\n' for i in wrong_ins]
                     for ins in wrong_ins:
                         log_ana.write(ins)
                     log_ana.write('-' * 80 + '\n')
+                    saver.save(session, os.path.join(res_path, 'model_saved'))
 
                 log_prf.write(log_info)
-                print datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
+                print 'test: ', datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )
     else:

@@ -127,7 +127,7 @@ class DataLoader(object):
                               self.train_y[batch_order])
             yield batch
 
-    def get_test_data(self):
+    def get_test_data(self, use_neg=True):
         if self.multi_ins:
             test_data = InputData(self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y)
             test_data_single = InputData(
