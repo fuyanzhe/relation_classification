@@ -26,7 +26,7 @@ m_dict = {
 
 
 def main():
-    model_name = 'birnn'
+    model_name = 'rnn'
     train_epochs_num = 100
     batch_size = 128
 
@@ -64,7 +64,7 @@ def main():
                 for batch in batches:
                     iter_num += 1
                     loss = model.fit(session, batch, dropout_keep_rate=model_setting.dropout_rate)
-                    _, c_label = model.evaluate(session, batch)
+                    _, c_label, _ = model.evaluate(session, batch)
                     if iter_num % 100 == 0:
                         _, prf_macro, _ = get_p_r_f1(c_label, batch.y)
                         p, r, f1 = prf_macro
@@ -78,8 +78,8 @@ def main():
                             epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
                         )
                 # test
-                use_neg = False
-                test_loss, test_pred = model.evaluate(session, test_data)
+                use_neg = True
+                test_loss, test_pred, test_prob = model.evaluate(session, test_data)
                 prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_data.y, use_neg)
                 p, r, f1 = prf_macro
                 log_info = 'test: ' + str(datetime.now()) + ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%,' \
@@ -88,10 +88,11 @@ def main():
                 )
                 if f1 > best_f1:
                     best_f1 = f1
+                    # record p, r, f1
                     log_ana.write(log_info)
                     if use_neg:
                         for id in range(len(prf_list)):
-                            rel_prf = 'rel: {}_{}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
+                            rel_prf = 'rel: {:>2}_{:<6}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
                                 id, id2rel[id], prf_list[id][3] * 100, prf_list[id][4] * 100, prf_list[id][5] * 100
                             )
                             log_ana.write(rel_prf)
@@ -101,12 +102,16 @@ def main():
                                 id+1, id2rel[id+1], prf_list[id][3] * 100, prf_list[id][4] * 100, prf_list[id][5] * 100
                             )
                             log_ana.write(rel_prf)
+                    # record wrong instance
                     wrong_ins = get_wrong_ins(test_pred, test_data, word2id, id2word, id2rel, use_neg)
                     wrong_ins = sorted(wrong_ins, key=lambda x: x[1])
                     wrong_ins = ['\t'.join(i) + '\n' for i in wrong_ins]
                     for ins in wrong_ins:
                         log_ana.write(ins)
                     log_ana.write('-' * 80 + '\n')
+                    # draw pr curve
+                    prc_fn = os.path.join(res_path, 'prc_epoch{}.png'.format(epoch_num))
+                    save_prcurve(test_prob, test_data.y, model_name, prc_fn)
                     saver.save(session, os.path.join(res_path, 'model_saved'))
 
                 log_prf.write(log_info)
@@ -114,7 +119,6 @@ def main():
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )
     else:
-        # birnn_mi test
         data_loader = DataLoader('./data', multi_ins=True)
         batch_size = 128
         print 'building {} model...'.format(model_name)

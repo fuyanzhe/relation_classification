@@ -6,12 +6,14 @@ import cPickle
 
 
 class InputData(object):
-    def __init__(self, word, pos1, pos2, slen, y):
+    def __init__(self, word, pos1, pos2, slen, y, win=None):
         self.word = word
         self.pos1 = pos1
         self.pos2 = pos2
         self.slen = slen
         self.y = y
+        if win is not None:
+            self.win = win
 
 
 class DataLoader(object):
@@ -29,6 +31,7 @@ class DataLoader(object):
             self.train_pos1 = np.load('{}/m-ins/train_pos1.npy'.format(data_dir))
             self.train_pos2 = np.load('{}/m-ins/train_pos2.npy'.format(data_dir))
             self.train_len = np.load('{}/m-ins/train_len.npy'.format(data_dir))
+            self.train_win = None
 
             print 'reading testing data'
             self.test_y = np.load('{}/m-ins/testall_y.npy'.format(data_dir))
@@ -36,6 +39,7 @@ class DataLoader(object):
             self.test_pos1 = np.load('{}/m-ins/testall_pos1.npy'.format(data_dir))
             self.test_pos2 = np.load('{}/m-ins/testall_pos2.npy'.format(data_dir))
             self.test_len = np.load('{}/m-ins/testall_len.npy'.format(data_dir))
+            self.test_win = None
 
             print 'reading single testing data'
             self.test_y_single = np.load('{}/s-ins/test_y.npy'.format(data_dir))
@@ -43,6 +47,7 @@ class DataLoader(object):
             self.test_pos1_single = np.load('{}/s-ins/test_pos1.npy'.format(data_dir))
             self.test_pos2_single = np.load('{}/s-ins/test_pos2.npy'.format(data_dir))
             self.test_len_single = np.load('{}/s-ins/test_len.npy'.format(data_dir))
+            self.test_win_single = None
 
         else:
             # 单实例模型
@@ -52,6 +57,7 @@ class DataLoader(object):
             self.train_pos1 = np.load('{}/s-ins/train_pos1.npy'.format(data_dir))
             self.train_pos2 = np.load('{}/s-ins/train_pos2.npy'.format(data_dir))
             self.train_len = np.load('{}/s-ins/train_len.npy'.format(data_dir))
+            self.train_win = None
 
             print 'reading testing data'
             self.test_y = np.load('{}/s-ins/test_y.npy'.format(data_dir))
@@ -59,6 +65,7 @@ class DataLoader(object):
             self.test_pos1 = np.load('{}/s-ins/test_pos1.npy'.format(data_dir))
             self.test_pos2 = np.load('{}/s-ins/test_pos2.npy'.format(data_dir))
             self.test_len = np.load('{}/s-ins/test_len.npy'.format(data_dir))
+            self.test_win = None
 
         if cnn_win_size:
             print 'generating window features...'
@@ -81,7 +88,7 @@ class DataLoader(object):
                     for sen in bag:
                         bag_win.append(get_sen_win(sen, cnn_win_size, pad_id))
                     train_word_win.append(bag_win)
-                self.train_word = np.asarray(train_word_win)
+                self.train_win = np.asarray(train_word_win)
 
                 # test multi-ins
                 for bag in self.test_word:
@@ -89,12 +96,12 @@ class DataLoader(object):
                     for sen in bag:
                         bag_win.append(get_sen_win(sen, cnn_win_size, pad_id))
                     test_word_win.append(bag_win)
-                self.test_word = np.asarray(test_word_win)
+                self.test_win = np.asarray(test_word_win)
 
                 # test single-ins
                 for sen in self.test_word_single:
                     test_word_win_single.append(get_sen_win(sen, cnn_win_size, pad_id))
-                self.test_word_single = np.asarray(test_word_win_single, dtype='int64')
+                self.test_win_single = np.asarray(test_word_win_single, dtype='int64')
 
             else:
                 train_word_win, test_word_win = [], []
@@ -102,17 +109,12 @@ class DataLoader(object):
                 # train word
                 for sen in self.train_word:
                     train_word_win.append(get_sen_win(sen, cnn_win_size, pad_id))
-                self.train_word = np.asarray(train_word_win, dtype='int64')
+                self.train_win = np.asarray(train_word_win, dtype='int64')
 
                 # test word
                 for sen in self.test_word:
                     test_word_win.append(get_sen_win(sen, cnn_win_size, pad_id))
-                self.test_word = np.asarray(test_word_win, dtype='int64')
-
-        assert len(self.train_y) == len(self.train_len) == len(self.train_word) == len(self.train_pos1) == len(
-            self.train_pos2)
-        assert len(self.test_y) == len(self.test_len) == len(self.test_word) == len(self.test_pos1) == len(
-            self.test_pos2)
+                self.test_win = np.asarray(test_word_win, dtype='int64')
 
     def get_train_batches(self, batch_size):
         train_order = range(len(self.train_y))
@@ -120,23 +122,35 @@ class DataLoader(object):
         batch_num = int(len(train_order) / batch_size)
         for i in range(batch_num):
             batch_order = train_order[i * batch_size: (i + 1) * batch_size]
-            batch = InputData(self.train_word[batch_order],
-                              self.train_pos1[batch_order],
-                              self.train_pos2[batch_order],
-                              self.train_len[batch_order],
-                              self.train_y[batch_order])
+            if self.train_win is not None:
+                batch = InputData(self.train_word[batch_order],
+                                  self.train_pos1[batch_order],
+                                  self.train_pos2[batch_order],
+                                  self.train_len[batch_order],
+                                  self.train_y[batch_order],
+                                  self.train_win[batch_order])
+            else:
+                batch = InputData(self.train_word[batch_order],
+                                  self.train_pos1[batch_order],
+                                  self.train_pos2[batch_order],
+                                  self.train_len[batch_order],
+                                  self.train_y[batch_order])
             yield batch
 
     def get_test_data(self, use_neg=True):
         if self.multi_ins:
-            test_data = InputData(self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y)
+            test_data = InputData(
+                self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y, self.test_win
+            )
             test_data_single = InputData(
                 self.test_word_single, self.test_pos1_single, self.test_pos2_single,
-                self.test_len_single, self.test_y_single
+                self.test_len_single, self.test_y_single, self.test_win_single
             )
             return test_data, test_data_single
         else:
-            test_data = InputData(self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y)
+            test_data = InputData(
+                self.test_word, self.test_pos1, self.test_pos2, self.test_len, self.test_y, self.test_win
+            )
             return test_data
 
     def get_test_batches(self, batch_size, use_single=True):
@@ -147,11 +161,19 @@ class DataLoader(object):
                 batch_num = int(len(test_order) / batch_size)
                 for i in range(batch_num):
                     batch_order = test_order[i * batch_size: (i + 1) * batch_size]
-                    batch = InputData(self.test_word_single[batch_order],
-                                      self.test_pos1_single[batch_order],
-                                      self.test_pos2_single[batch_order],
-                                      self.test_len_single[batch_order],
-                                      self.test_y_single[batch_order])
+                    if self.test_win_single is not None:
+                        batch = InputData(self.test_word_single[batch_order],
+                                          self.test_pos1_single[batch_order],
+                                          self.test_pos2_single[batch_order],
+                                          self.test_len_single[batch_order],
+                                          self.test_y_single[batch_order],
+                                          self.test_win_single[batch_order])
+                    else:
+                        batch = InputData(self.test_word_single[batch_order],
+                                          self.test_pos1_single[batch_order],
+                                          self.test_pos2_single[batch_order],
+                                          self.test_len_single[batch_order],
+                                          self.test_y_single[batch_order])
                     yield batch
             else:
                 test_order = range(len(self.test_y))
@@ -159,11 +181,19 @@ class DataLoader(object):
                 batch_num = int(len(test_order) / batch_size)
                 for i in range(batch_num):
                     batch_order = test_order[i * batch_size: (i + 1) * batch_size]
-                    batch = InputData(self.test_word[batch_order],
-                                      self.test_pos1[batch_order],
-                                      self.test_pos2[batch_order],
-                                      self.test_len[batch_order],
-                                      self.test_y[batch_order])
+                    if self.test_win is not None:
+                        batch = InputData(self.test_word[batch_order],
+                                          self.test_pos1[batch_order],
+                                          self.test_pos2[batch_order],
+                                          self.test_len[batch_order],
+                                          self.test_y[batch_order],
+                                          self.test_win[batch_order])
+                    else:
+                        batch = InputData(self.test_word[batch_order],
+                                          self.test_pos1[batch_order],
+                                          self.test_pos2[batch_order],
+                                          self.test_len[batch_order],
+                                          self.test_y[batch_order])
                     yield batch
         else:
             test_order = range(len(self.test_y))
@@ -171,9 +201,17 @@ class DataLoader(object):
             batch_num = int(len(test_order) / batch_size)
             for i in range(batch_num):
                 batch_order = test_order[i * batch_size: (i + 1) * batch_size]
-                batch = InputData(self.test_word[batch_order],
-                                  self.test_pos1[batch_order],
-                                  self.test_pos2[batch_order],
-                                  self.test_len[batch_order],
-                                  self.test_y[batch_order])
+                if self.test_win is not None:
+                    batch = InputData(self.test_word[batch_order],
+                                      self.test_pos1[batch_order],
+                                      self.test_pos2[batch_order],
+                                      self.test_len[batch_order],
+                                      self.test_y[batch_order],
+                                      self.test_win[batch_order])
+                else:
+                    batch = InputData(self.test_word[batch_order],
+                                      self.test_pos1[batch_order],
+                                      self.test_pos2[batch_order],
+                                      self.test_len[batch_order],
+                                      self.test_y[batch_order])
                 yield batch

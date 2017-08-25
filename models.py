@@ -125,7 +125,11 @@ class CNN(object):
         return h_drop
 
     def fit(self, session, input_data, dropout_keep_rate):
-        feed_dict = {self.input_words: input_data.word,
+        if self.window_size:
+            input_x = input_data.win
+        else:
+            input_x = input_data.word
+        feed_dict = {self.input_words: input_x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -136,13 +140,19 @@ class CNN(object):
         return model_loss
 
     def evaluate(self, session, input_data):
-        feed_dict = {self.input_words: input_data.word,
+        if self.window_size:
+            input_x = input_data.win
+        else:
+            input_x = input_data.word
+        feed_dict = {self.input_words: input_x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
                      self.dropout_keep_rate: 1}
-        model_loss, label_pred = session.run([self.model_loss, self.class_label], feed_dict=feed_dict)
-        return model_loss, label_pred
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
 
 
 class RNN(object):
@@ -245,9 +255,10 @@ class RNN(object):
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
                      self.dropout_keep_rate: 1}
-        model_loss, label_pred = session.run([self.model_loss, self.class_label], feed_dict=feed_dict)
-        return model_loss, label_pred
-
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
 
 class BiRNN(object):
     def __init__(self, word_embedding, setting):
@@ -352,8 +363,10 @@ class BiRNN(object):
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
                      self.dropout_keep_rate: 1}
-        model_loss, label_pred = session.run([self.model_loss, self.class_label], feed_dict=feed_dict)
-        return model_loss, label_pred
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
 
 
 class BiRNN_ATT(object):
@@ -482,8 +495,10 @@ class BiRNN_ATT(object):
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
                      self.dropout_keep_rate: 1}
-        model_loss, label_pred = session.run([self.model_loss, self.class_label], feed_dict=feed_dict)
-        return model_loss, label_pred
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
 
 
 class CNN_MI(object):
@@ -646,7 +661,8 @@ class RNN_MI(object):
             self.input_labels: input_data.y,
             self.dropout_keep_rate: 1
         }
-
-        model_loss, label_pred = session.run([self.total_loss, self.predictions], feed_dict=feed_dict)
-        return model_loss, label_pred
+        model_loss, label_pred, label_prob = session.run(
+            [self.total_loss, self.predictions, self.prob], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
 

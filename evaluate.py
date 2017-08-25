@@ -2,6 +2,9 @@
 # Created by han on 17-8-11
 
 import numpy as np
+from matplotlib import pyplot as plt
+from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import average_precision_score
 
 
 def get_confusion_matrix(pred, answer):
@@ -108,79 +111,30 @@ def get_wrong_ins(pred, test_data, word2id, id2word, id2rel, use_neg=True):
     return wrong_labeled
 
 
-def get_pr_curve(res_list):
-    """
-    res_list = [(predict_probability, relation)] * instance_number
-    """
-    tot = 0
-    rel_num = len(res_list[0][1])
-    prob_rel_list = list()
-    pr_list = list()
-    # exclude NA
-    for i in range(len(res_list)):
-        if res_list[i][1].index(1) != 0:
-            tot += 1
-        for j in range(1, rel_num):
-            prob_rel_list.append((res_list[i][0][j], res_list[i][1][j]))
-    sorted_list = sorted(prob_rel_list, reverse=True)
-    for i in range(2000):
-        correct = sum([j[1] for j in sorted_list[:(i + 1)]])
-        pr_list.append((float(correct) / float(i + 1), float(correct) / float(tot)))
-        if (i + 1) % 100 == 0:
-            print "p: %f, r: %f" % (float(correct) / float(i + 1), float(correct) / float(tot))
-    return pr_list
-
-
-def get_pr_curve_bag(res_list):
-    """
-    res_list = [(entity_pair_idx, predict_probability, relation_set)] * bag_number
-    or
-    res_list = [(predict_probability, relation)] * bag_number
-    """
-    if len(res_list[0]) == 3:
-        tot = 0
-        rel_num = len(res_list[0][1])
-        prob_rel_list = list()
-        pr_list = list()
-        # exclude NA
-        for i in range(len(res_list)):
-            if res_list[i][2] != {0}:
-                tot += 1
-            rel_vec = [0] * rel_num
-            for rel_idx in res_list[i][2]:
-                rel_vec[rel_idx] = 1
-            for j in range(1, rel_num):
-                prob_rel_list.append((res_list[i][1][j], rel_vec[j], j, res_list[i][0], res_list[i][2]))
-        sorted_list = sorted(prob_rel_list, reverse=True)
-        for i in range(min(5000, len(res_list))):
-            correct = sum([j[1] for j in sorted_list[:(i + 1)]])
-            pr_list.append(
-                (float(correct) / float(i + 1), float(correct) / float(tot),
-                 sorted_list[i][0], sorted_list[i][2], sorted_list[i][3], sorted_list[i][4])
-            )
-            if (i + 1) % 100 == 0:
-                print "p: %f, r: %f" % (float(correct) / float(i + 1), float(correct) / float(tot))
-        return pr_list
+def save_prcurve(prob, answer, model_name, save_fn, use_neg=True):
+    if not use_neg:
+        prob_dn = []
+        ans_dn = []
+        for p in prob:
+            prob_dn.append(p[1:])
+        for ans in answer:
+            ans_dn.append(ans[1:])
+        prob = np.reshape(np.array(prob_dn), (-1))
+        ans = np.reshape(np.array(ans_dn), (-1))
     else:
-        tot = 0
-        rel_num = len(res_list[0][0])
-        prob_rel_list = list()
-        pr_list = list()
-        # exclude NA
-        for i in range(len(res_list)):
-            if res_list[i][1] != 0:
-                tot += 1
-            rel_vec = [0] * rel_num
-            rel_vec[res_list[i][1]] = 1
-            for j in range(1, rel_num):
-                prob_rel_list.append((res_list[i][0][j], rel_vec[j], j, res_list[i][1]))
-        sorted_list = sorted(prob_rel_list, reverse=True)
-        for i in range(min(5000, len(res_list))):
-            correct = sum([j[1] for j in sorted_list[:(i + 1)]])
-            pr_list.append(
-                (float(correct) / float(i + 1), float(correct) / float(tot),
-                 sorted_list[i][0], sorted_list[i][2], sorted_list[i][3])
-            )
-            if (i + 1) % 100 == 0:
-                print "p: %f, r: %f" % (float(correct) / float(i + 1), float(correct) / float(tot))
-        return pr_list
+        prob = np.reshape(prob, (-1))
+        ans = np.reshape(answer, (-1))
+
+    precision, recall, threshold = precision_recall_curve(ans, prob)
+    average_precision = average_precision_score(ans, prob)
+
+    plt.clf()
+    plt.plot(recall[:], precision[:], lw=2, color='navy', label=model_name)
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    # plt.ylim([0.3, 1.0])
+    # plt.xlim([0.0, 0.4])
+    plt.title('Precision-Recall Area={0:0.2f}'.format(average_precision))
+    plt.legend(loc="upper right")
+    plt.grid(True)
+    plt.savefig(save_fn)
