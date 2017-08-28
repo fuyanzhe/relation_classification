@@ -21,7 +21,7 @@ class DataLoader(object):
         self.multi_ins = multi_ins
 
         print 'reading embeddings'
-        self.wordembedding = np.load('{}/vec.npy'.format(data_dir))
+        self.wordembedding = np.load('{}/word_vec.npy'.format(data_dir))
 
         if self.multi_ins:
             # 多实例模型
