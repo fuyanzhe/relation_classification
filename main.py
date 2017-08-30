@@ -26,7 +26,7 @@ m_dict = {
 
 
 def main():
-    model_name = 'rnn'
+    model_name = 'rnn_mi'
     train_epochs_num = 100
     batch_size = 128
 
