@@ -21,7 +21,7 @@ class RnnSetting(object):
         self.pos_size = 5
         self.class_num = 31
         self.sen_len = 100
-        self.hidden_size = 100
+        self.hidden_size = 200
         self.layers = 1
         self.learning_rate = None
         self.dropout_rate = 0.5
@@ -33,7 +33,7 @@ class RnnMiSetting(object):
         self.pos_size = 5
         self.class_num = 31
         self.sen_len = 100
-        self.hidden_size = 100
+        self.hidden_size = 200
         self.layers = 1
         self.learning_rate = None
         self.dropout_rate = 0.5

@@ -75,26 +75,24 @@ def get_p_r_f1(pred, answer, use_neg=True):
     return p_r_f1_list, p_r_f1_macro, p_r_f1_micro
 
 
-def get_wrong_ins(pred, test_data, x2id, id2x, id2rel, use_neg=True):
+def get_wrong_ins(pred, ans, sen, p1, p2, x2id, id2x, id2rel, use_neg=True):
     """
     show wrong labeled instance
     """
-    assert len(pred) == len(test_data.y)
+    assert len(pred) == len(ans)
     pred = np.array(pred)
-    answer = np.array([np.argmax(i) for i in test_data.y])
-    wrong_labeled_ins = test_data.x[pred != answer]
-    wrong_labeled_lab = answer[pred != answer]
-    wrong_labeled_pre = pred[pred != answer]
+    answer = np.array([np.argmax(i) for i in ans])
+    wrong_labeled_ins = np.asarray(sen)[pred != answer]
+    wrong_labeled_lab = np.asarray(answer)[pred != answer]
+    wrong_labeled_pre = np.asarray(pred)[pred != answer]
 
     max_sen_len = len(wrong_labeled_ins[0])
     # e1 pos
-    wrong_labeled_pos1 = test_data.pos1[pred != answer]
-    wrong_labeled_pos1 = wrong_labeled_pos1[:, 0]
+    wrong_labeled_pos1 = np.asarray(p1)[pred != answer]
     wrong_labeled_e1p = max_sen_len - wrong_labeled_pos1 + 1
 
     # e2 pos
-    wrong_labeled_pos2 = test_data.pos2[pred != answer]
-    wrong_labeled_pos2 = wrong_labeled_pos2[:, 0]
+    wrong_labeled_pos2 = np.asarray(p2)[pred != answer]
     wrong_labeled_e2p = max_sen_len - wrong_labeled_pos2 + 1
 
     wrong_ins = []

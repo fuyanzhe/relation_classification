@@ -66,10 +66,10 @@ class Cnn(object):
         # softmax
         with tf.name_scope('softmax'):
             # full connection layer before softmax
-            # self.softmax_w = tf.get_variable('softmax_W', [self.filter_num * len(self.filter_sizes), self.class_num])
-            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            # self.softmax_pred = tf.matmul(self.outputs, self.softmax_w) + self.softmax_b
-            self.softmax_pred = self.outputs
+            self.softmax_w = tf.get_variable('softmax_W', [self.filter_num * len(self.filter_sizes), self.class_num])
+            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            self.softmax_pred = tf.matmul(self.outputs, self.softmax_w) + self.softmax_b
+            # self.softmax_pred = self.outputs
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -219,10 +219,9 @@ class Gru(object):
         # softmax
         with tf.name_scope('softmax'):
             # full connection layer before softmax
-            # self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
-            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            # self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
-            self.softmax_pred = self.output_final
+            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
+            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -332,10 +331,9 @@ class BiGru(object):
 
         # softmax
         with tf.name_scope('softmax'):
-            # self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size * 2, self.class_num])
-            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            # self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
-            self.softmax_pred = self.output_final
+            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size * 2, self.class_num])
+            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -465,10 +463,9 @@ class BiGru_Att(object):
 
         # softmax
         with tf.name_scope('softmax'):
-            # self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
-            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            # self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
-            self.softmax_pred = self.output_final
+            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
+            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -598,10 +595,9 @@ class BiGru_SelfAtt(object):
 
         # softmax
         with tf.name_scope('softmax'):
-            # self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
-            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            # self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
-            self.softmax_pred = self.output_final
+            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
+            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -756,8 +752,9 @@ class BiGru_Mi(object):
 
                 with tf.name_scope("accuracy"):
                     self.accuracy.append(
-                        tf.reduce_mean(tf.cast(tf.equal(self.predictions[i], tf.argmax(self.input_labels[i], 0)), "float"),
-                                       name="accuracy"))
+                        tf.reduce_mean(tf.cast(
+                            tf.equal(self.predictions[i], tf.argmax(self.input_labels[i], 0)), "float"
+                        ), name="accuracy"))
 
         # optimizer
         if self.learning_rate:
@@ -809,4 +806,3 @@ class BiGru_Mi(object):
             [self.total_loss, self.predictions, self.prob], feed_dict=feed_dict
         )
         return model_loss, label_pred, label_prob
-
