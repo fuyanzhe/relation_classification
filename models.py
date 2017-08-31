@@ -3,17 +3,20 @@
 import tensorflow as tf
 
 
-class CNN(object):
-    def __init__(self, word_embedding, setting):
+class Cnn(object):
+    """
+    Basic CNN model.
+    """
+    def __init__(self, x_embedding, setting):
         # model name
         self.model_name = 'CNN'
 
         # embedding matrix
-        self.embed_matrix_word = tf.get_variable(
-            'embed_matrix_word', word_embedding.shape,
-            initializer=tf.constant_initializer(word_embedding)
+        self.embed_matrix_x = tf.get_variable(
+            'embed_matrix_x', x_embedding.shape,
+            initializer=tf.constant_initializer(x_embedding)
         )
-        self.embed_size_word = int(self.embed_matrix_word.get_shape()[1])
+        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
         self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [setting.pos_num, setting.pos_size])
         self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [setting.pos_num, setting.pos_size])
         self.embed_size_pos = setting.pos_size
@@ -21,7 +24,7 @@ class CNN(object):
         # window size
         self.window_size = setting.win_size
         # max sentence length
-        self.max_sentence_len = setting.sent_len
+        self.max_sentence_len = setting.sen_len
 
         # filter number
         self.filter_sizes = setting.filter_sizes
@@ -31,7 +34,7 @@ class CNN(object):
         self.class_num = setting.class_num
 
         # inputs
-        self.input_words = tf.placeholder(tf.int32, [None, self.max_sentence_len, self.window_size], name='input_words')
+        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len, self.window_size], name='input_sen')
         self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
 
         # position feature
@@ -45,15 +48,15 @@ class CNN(object):
         self.learning_rate = setting.learning_rate
 
         # embedded
-        self.emb_word = tf.reshape(
-            tf.nn.embedding_lookup(self.embed_matrix_word, self.input_words),
-            [-1, self.max_sentence_len, self.window_size * self.embed_size_word]
+        self.emb_sen = tf.reshape(
+            tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen),
+            [-1, self.max_sentence_len, self.window_size * self.embed_size_x]
         )
         self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
         self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
 
         # concat embeddings
-        self.emb_all = tf.concat([self.emb_word, self.emb_pos1, self.emb_pos2], 2)
+        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
         self.emb_all_expanded = tf.expand_dims(self.emb_all, -1)
 
         # states and outputs
@@ -62,9 +65,11 @@ class CNN(object):
 
         # softmax
         with tf.name_scope('softmax'):
-            self.softmax_w = tf.get_variable('softmax_W', [self.filter_num * len(self.filter_sizes), self.class_num])
-            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            self.softmax_pred = tf.matmul(self.outputs, self.softmax_w) + self.softmax_b
+            # full connection layer before softmax
+            # self.softmax_w = tf.get_variable('softmax_W', [self.filter_num * len(self.filter_sizes), self.class_num])
+            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            # self.softmax_pred = tf.matmul(self.outputs, self.softmax_w) + self.softmax_b
+            self.softmax_pred = self.outputs
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -87,7 +92,7 @@ class CNN(object):
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
 
         # saver
-        self.saver = tf.train.Saver(tf.all_variables())
+        self.saver = tf.train.Saver(tf.global_variables())
 
     def sentence_encoder(self):
         # convolution and max pooling
@@ -96,7 +101,7 @@ class CNN(object):
             with tf.name_scope('conv-maxpool-%s' % filter_size):
                 # convolution layer
                 filter_shape = [
-                    filter_size, self.embed_size_word * self.window_size + 2 * self.embed_size_pos, 1, self.filter_num
+                    filter_size, self.embed_size_x * self.window_size + 2 * self.embed_size_pos, 1, self.filter_num
                 ]
 
                 w = tf.get_variable('W', filter_shape, initializer=tf.truncated_normal_initializer(stddev=0.1))
@@ -128,8 +133,8 @@ class CNN(object):
         if self.window_size:
             input_x = input_data.win
         else:
-            input_x = input_data.word
-        feed_dict = {self.input_words: input_x,
+            input_x = input_data.x
+        feed_dict = {self.input_sen: input_x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -143,8 +148,8 @@ class CNN(object):
         if self.window_size:
             input_x = input_data.win
         else:
-            input_x = input_data.word
-        feed_dict = {self.input_words: input_x,
+            input_x = input_data.x
+        feed_dict = {self.input_sen: input_x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -155,13 +160,16 @@ class CNN(object):
         return model_loss, label_pred, label_prob
 
 
-class RNN(object):
-    def __init__(self, word_embedding, setting):
+class Gru(object):
+    """
+    Basic GRU model.
+    """
+    def __init__(self, x_embedding, setting):
         # model name
-        self.model_name = 'RNN'
+        self.model_name = 'GRU'
 
         # settings
-        self.max_sentence_len = setting.sent_len
+        self.max_sentence_len = setting.sen_len
         self.hidden_size = setting.hidden_size
         self.class_num = setting.class_num
         self.pos_num = setting.pos_num
@@ -169,16 +177,16 @@ class RNN(object):
         self.learning_rate = setting.learning_rate
 
         # embedding matrix
-        self.embed_matrix_word = tf.get_variable(
-            'embed_matrix_word', word_embedding.shape,
-            initializer=tf.constant_initializer(word_embedding)
+        self.embed_matrix_x = tf.get_variable(
+            'embed_matrix_x', x_embedding.shape,
+            initializer=tf.constant_initializer(x_embedding)
         )
-        self.embed_size_word = int(self.embed_matrix_word.get_shape()[1])
+        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
         self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
         self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
 
         # inputs
-        self.input_words = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_words')
+        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
         self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
 
         # position feature
@@ -189,18 +197,17 @@ class RNN(object):
         self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
 
         # embedded
-        self.emb_word = tf.nn.embedding_lookup(self.embed_matrix_word, self.input_words)
+        self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
         self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
         self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
 
         # concat embeddings
-        self.emb_all = tf.concat([self.emb_word, self.emb_pos1, self.emb_pos2], 2)
-        self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis = 1)
+        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
+        self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis=1)
 
         # states and outputs
         with tf.name_scope('sentence_encoder'):
             # cell
-            # self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, forget_bias=0.0, state_is_tuple=True)
             self.rnn_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
             self.rnn_cell = tf.nn.rnn_cell.DropoutWrapper(self.rnn_cell, output_keep_prob=self.dropout_keep_rate)
 
@@ -211,9 +218,11 @@ class RNN(object):
 
         # softmax
         with tf.name_scope('softmax'):
-            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
-            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
+            # full connection layer before softmax
+            # self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
+            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            # self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
+            self.softmax_pred = self.output_final
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -236,10 +245,10 @@ class RNN(object):
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
 
         # # saver
-        # self.saver = tf.train.Saver(tf.all_variables())
+        # self.saver = tf.train.Saver(tf.global_variables())
 
     def fit(self, session, input_data, dropout_keep_rate):
-        feed_dict = {self.input_words: input_data.word,
+        feed_dict = {self.input_sen: input_data.x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -250,7 +259,7 @@ class RNN(object):
         return model_loss
 
     def evaluate(self, session, input_data):
-        feed_dict = {self.input_words: input_data.word,
+        feed_dict = {self.input_sen: input_data.x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -260,13 +269,17 @@ class RNN(object):
         )
         return model_loss, label_pred, label_prob
 
-class BiRNN(object):
-    def __init__(self, word_embedding, setting):
+
+class BiGru(object):
+    """
+    Bidirectional GRU model.
+    """
+    def __init__(self, x_embedding, setting):
         # model name
-        self.model_name = 'BiRNN'
+        self.model_name = 'BiGRU'
 
         # settings
-        self.max_sentence_len = setting.sent_len
+        self.max_sentence_len = setting.sen_len
         self.hidden_size = setting.hidden_size
         self.class_num = setting.class_num
         self.pos_num = setting.pos_num
@@ -274,16 +287,16 @@ class BiRNN(object):
         self.learning_rate = setting.learning_rate
 
         # embedding matrix
-        self.embed_matrix_word = tf.get_variable(
-            'embed_matrix_word', word_embedding.shape,
-            initializer=tf.constant_initializer(word_embedding)
+        self.embed_matrix_x = tf.get_variable(
+            'embed_matrix_x', x_embedding.shape,
+            initializer=tf.constant_initializer(x_embedding)
         )
-        self.embed_size_word = int(self.embed_matrix_word.get_shape()[1])
+        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
         self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
         self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
 
         # inputs
-        self.input_words = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_words')
+        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
         self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
 
         # position feature
@@ -294,12 +307,12 @@ class BiRNN(object):
         self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
 
         # embedded
-        self.emb_word = tf.nn.embedding_lookup(self.embed_matrix_word, self.input_words)
+        self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
         self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
         self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
 
         # concat embeddings
-        self.emb_all = tf.concat([self.emb_word, self.emb_pos1, self.emb_pos2], 2)
+        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
         self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis = 1)
 
         # states and outputs
@@ -319,9 +332,10 @@ class BiRNN(object):
 
         # softmax
         with tf.name_scope('softmax'):
-            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size * 2, self.class_num])
-            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
+            # self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size * 2, self.class_num])
+            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            # self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
+            self.softmax_pred = self.output_final
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -344,10 +358,10 @@ class BiRNN(object):
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
 
         # # saver
-        # self.saver = tf.train.Saver(tf.all_variables())
+        # self.saver = tf.train.Saver(tf.global_variables())
 
     def fit(self, session, input_data, dropout_keep_rate):
-        feed_dict = {self.input_words: input_data.word,
+        feed_dict = {self.input_sen: input_data.x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -358,7 +372,7 @@ class BiRNN(object):
         return model_loss
 
     def evaluate(self, session, input_data):
-        feed_dict = {self.input_words: input_data.word,
+        feed_dict = {self.input_sen: input_data.x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -369,13 +383,13 @@ class BiRNN(object):
         return model_loss, label_pred, label_prob
 
 
-class BiRNN_ATT(object):
-    def __init__(self, word_embedding, setting):
+class BiGru_Att(object):
+    def __init__(self, x_embedding, setting):
         # model name
         self.model_name = 'BiRNN_ATT'
 
         # settings
-        self.max_sentence_len = setting.sent_len
+        self.max_sentence_len = setting.sen_len
         self.hidden_size = setting.hidden_size
         self.class_num = setting.class_num
         self.pos_num = setting.pos_num
@@ -383,16 +397,16 @@ class BiRNN_ATT(object):
         self.learning_rate = setting.learning_rate
 
         # embedding matrix
-        self.embed_matrix_word = tf.get_variable(
-            'embed_matrix_word', word_embedding.shape,
-            initializer=tf.constant_initializer(word_embedding)
+        self.embed_matrix_x = tf.get_variable(
+            'embed_matrix_x', x_embedding.shape,
+            initializer=tf.constant_initializer(x_embedding)
         )
-        self.embed_size_word = int(self.embed_matrix_word.get_shape()[1])
+        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
         self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
         self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
 
         # inputs
-        self.input_words = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_words')
+        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
         self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
 
         # position feature
@@ -403,12 +417,145 @@ class BiRNN_ATT(object):
         self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
 
         # embedded
-        self.emb_word = tf.nn.embedding_lookup(self.embed_matrix_word, self.input_words)
+        self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
         self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
         self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
 
         # concat embeddings
-        self.emb_all = tf.concat([self.emb_word, self.emb_pos1, self.emb_pos2], 2)
+        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
+        self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis=1)
+
+        # states and outputs
+        with tf.name_scope('sentence_encoder'):
+            # cell
+            self.foward_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
+            self.backward_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
+            self.foward_cell = tf.nn.rnn_cell.DropoutWrapper(self.foward_cell, output_keep_prob=self.dropout_keep_rate)
+            self.backward_cell = tf.nn.rnn_cell.DropoutWrapper(self.backward_cell, output_keep_prob=self.dropout_keep_rate)
+
+            # rnn
+            with tf.name_scope('birnn'):
+                self.outputs, _, _ = tf.contrib.rnn.static_bidirectional_rnn(
+                    self.foward_cell, self.backward_cell, self.emb_all_us, dtype=tf.float32
+                )
+
+            outputs_forward = [i[:, :self.hidden_size] for i in self.outputs]
+            outputs_backward = [i[:, self.hidden_size:] for i in self.outputs]
+            output_forward = tf.reshape(tf.concat(axis=1, values=outputs_forward), [-1, self.max_sentence_len, self.hidden_size])
+            output_backward = tf.reshape(tf.concat(axis=1, values=outputs_backward), [-1, self.max_sentence_len, self.hidden_size])
+
+            self.output_h = tf.add(output_forward, output_backward)
+
+            # attention
+            with tf.name_scope('attention'):
+                self.attention_w = tf.get_variable('attention_omega', [self.hidden_size, 1])
+                self.attention_A = tf.reshape(
+                    tf.nn.softmax(
+                        tf.reshape(
+                            tf.matmul(
+                                tf.reshape(tf.tanh(self.output_h), [-1, self.hidden_size]),
+                                self.attention_w
+                            ),
+                            [-1, self.max_sentence_len]
+                        )
+                    ),
+                    [-1, 1, self.max_sentence_len]
+                )
+                self.output_final = tf.reshape(tf.matmul(self.attention_A, self.output_h), [-1, self.hidden_size])
+
+        # softmax
+        with tf.name_scope('softmax'):
+            # self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
+            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            # self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
+            self.softmax_pred = self.output_final
+            self.softmax_res = tf.nn.softmax(self.softmax_pred)
+
+        # get max softmax predict result of each relation
+        self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
+
+        # class label
+        self.class_label = tf.argmax(self.softmax_res, 1)
+
+        # choose the min loss instance index
+        self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.softmax_pred, labels=self.input_labels)
+        self.min_loss_idx = tf.argmin(self.instance_loss, 0)
+
+        # model loss
+        self.model_loss = tf.reduce_mean(self.instance_loss)
+
+        # optimizer
+        if self.learning_rate:
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
+        else:
+            self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
+
+        # # saver
+        # self.saver = tf.train.Saver(tf.global_variables())
+
+    def fit(self, session, input_data, dropout_keep_rate):
+        feed_dict = {self.input_sen: input_data.x,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: dropout_keep_rate
+                     }
+        session.run(self.optimizer, feed_dict=feed_dict)
+        model_loss = session.run(self.model_loss, feed_dict=feed_dict)
+        return model_loss
+
+    def evaluate(self, session, input_data):
+        feed_dict = {self.input_sen: input_data.x,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: 1}
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
+
+
+class BiGru_SelfAtt(object):
+    def __init__(self, x_embedding, setting):
+        # model name
+        self.model_name = 'BiRNN_ATT'
+
+        # settings
+        self.max_sentence_len = setting.sen_len
+        self.hidden_size = setting.hidden_size
+        self.class_num = setting.class_num
+        self.pos_num = setting.pos_num
+        self.pos_size = setting.pos_size
+        self.learning_rate = setting.learning_rate
+
+        # embedding matrix
+        self.embed_matrix_x = tf.get_variable(
+            'embed_matrix_x', x_embedding.shape,
+            initializer=tf.constant_initializer(x_embedding)
+        )
+        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
+        self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
+        self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
+
+        # inputs
+        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
+        self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
+
+        # position feature
+        self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
+        self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
+
+        # dropout keep probability
+        self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
+
+        # embedded
+        self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
+        self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
+        self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
+
+        # concat embeddings
+        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
         self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis = 1)
 
         # states and outputs
@@ -451,9 +598,10 @@ class BiRNN_ATT(object):
 
         # softmax
         with tf.name_scope('softmax'):
-            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
-            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
+            # self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
+            # self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            # self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
+            self.softmax_pred = self.output_final
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -476,10 +624,10 @@ class BiRNN_ATT(object):
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
 
         # # saver
-        # self.saver = tf.train.Saver(tf.all_variables())
+        # self.saver = tf.train.Saver(tf.global_variables())
 
     def fit(self, session, input_data, dropout_keep_rate):
-        feed_dict = {self.input_words: input_data.word,
+        feed_dict = {self.input_sen: input_data.word,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -490,7 +638,7 @@ class BiRNN_ATT(object):
         return model_loss
 
     def evaluate(self, session, input_data):
-        feed_dict = {self.input_words: input_data.word,
+        feed_dict = {self.input_sen: input_data.word,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -501,17 +649,13 @@ class BiRNN_ATT(object):
         return model_loss, label_pred, label_prob
 
 
-class CNN_MI(object):
-    pass
-
-
-class RNN_MI(object):
-    def __init__(self, word_embedding, setting):
+class BiGru_Mi(object):
+    def __init__(self, x_embedding, setting):
         # model name
         self.model_name = 'RNN_MI'
 
         # settings
-        self.max_sentence_len = setting.sent_len
+        self.max_sentence_len = setting.sen_len
         self.hidden_size = setting.hidden_size
         self.class_num = setting.class_num
         self.pos_num = setting.pos_num
@@ -520,11 +664,11 @@ class RNN_MI(object):
         self.bag_num = setting.bag_num
 
         # embedding matrix
-        self.embed_matrix_word = tf.get_variable(
-            'embed_matrix_word', word_embedding.shape,
-            initializer=tf.constant_initializer(word_embedding)
+        self.embed_matrix_x = tf.get_variable(
+            'embed_matrix_x', x_embedding.shape,
+            initializer=tf.constant_initializer(x_embedding)
         )
-        self.embed_size_word = int(self.embed_matrix_word.get_shape()[1])
+        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
         self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
         self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
 
@@ -533,7 +677,7 @@ class RNN_MI(object):
         self.instance_num = self.bag_shapes[-1]
 
         # inputs
-        self.input_words = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_words')
+        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
         self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
 
         # position feature
@@ -544,12 +688,12 @@ class RNN_MI(object):
         self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
 
         # embedded
-        self.emb_word = tf.nn.embedding_lookup(self.embed_matrix_word, self.input_words)
+        self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
         self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
         self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
 
         # concat embeddings
-        self.emb_all = tf.concat([self.emb_word, self.emb_pos1, self.emb_pos2], 2)
+        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
         self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis=1)
 
         # states and outputs
@@ -622,26 +766,26 @@ class RNN_MI(object):
             self.optimizer = tf.train.AdamOptimizer().minimize(self.total_loss)
 
         # # saver
-        # self.saver = tf.train.Saver(tf.all_variables())
+        # self.saver = tf.train.Saver(tf.global_variables())
 
     def fit(self, session, input_data, dropout_keep_rate):
         total_shape = [0]
         total_num = 0
-        total_word = []
+        total_x = []
         total_pos1 = []
         total_pos2 = []
-        for bag_idx in range(len(input_data.word)):
+        for bag_idx in range(len(input_data.x)):
             total_num += len(input_data.word[bag_idx])
             total_shape.append(total_num)
             for sent in input_data.word[bag_idx]:
-                total_word.append(sent)
+                total_x.append(sent)
             for pos1 in input_data.pos1[bag_idx]:
                 total_pos1.append(pos1)
             for pos2 in input_data.pos2[bag_idx]:
                 total_pos2.append(pos2)
         feed_dict = {
             self.bag_shapes: total_shape,
-            self.input_words: total_word,
+            self.input_sen: total_x,
             self.input_pos1: total_pos1,
             self.input_pos2: total_pos2,
             self.input_labels: input_data.y,
@@ -655,7 +799,7 @@ class RNN_MI(object):
         total_shape = range(len(input_data.word) + 1)
         feed_dict = {
             self.bag_shapes: total_shape,
-            self.input_words: input_data.word,
+            self.input_sen: input_data.x,
             self.input_pos1: input_data.pos1,
             self.input_pos2: input_data.pos2,
             self.input_labels: input_data.y,

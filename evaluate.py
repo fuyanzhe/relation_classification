@@ -65,27 +65,37 @@ def static_cm(confusion_matrix, use_neg=True):
 
 
 def get_p_r_f1(pred, answer, use_neg=True):
+    """
+    get p, r, f1 by give prediction and answer, use_neg indicated whether p, r, f of NA relation is counted in Macro-avg
+    """
     assert len(pred) == len(answer)
     confusion_matrix = get_confusion_matrix(pred, answer)
     p_r_f1_list, p_r_f1_macro, p_r_f1_micro = static_cm(confusion_matrix, use_neg)
+
     return p_r_f1_list, p_r_f1_macro, p_r_f1_micro
 
 
-def get_wrong_ins(pred, test_data, word2id, id2word, id2rel, use_neg=True):
+def get_wrong_ins(pred, test_data, x2id, id2x, id2rel, use_neg=True):
+    """
+    show wrong labeled instance
+    """
     assert len(pred) == len(test_data.y)
     pred = np.array(pred)
     answer = np.array([np.argmax(i) for i in test_data.y])
-    wrong_labeled_ins = test_data.word[pred != answer]
+    wrong_labeled_ins = test_data.x[pred != answer]
     wrong_labeled_lab = answer[pred != answer]
     wrong_labeled_pre = pred[pred != answer]
+
+    max_sen_len = len(wrong_labeled_ins[0])
     # e1 pos
     wrong_labeled_pos1 = test_data.pos1[pred != answer]
     wrong_labeled_pos1 = wrong_labeled_pos1[:, 0]
-    wrong_labeled_e1p = 91 - wrong_labeled_pos1
+    wrong_labeled_e1p = max_sen_len - wrong_labeled_pos1 + 1
+
     # e2 pos
     wrong_labeled_pos2 = test_data.pos2[pred != answer]
     wrong_labeled_pos2 = wrong_labeled_pos2[:, 0]
-    wrong_labeled_e2p = 91 - wrong_labeled_pos2
+    wrong_labeled_e2p = max_sen_len - wrong_labeled_pos2 + 1
 
     wrong_ins = []
     wrong_ins_e1 = []
@@ -93,7 +103,7 @@ def get_wrong_ins(pred, test_data, word2id, id2word, id2rel, use_neg=True):
     wrong_ins_lab = []
     wrong_ins_pre = []
 
-    blank_id = word2id['_BLANK']
+    blank_id = x2id['_BLANK']
     for idx in range(len(wrong_labeled_ins)):
         if (not use_neg) and wrong_labeled_lab[idx] == 0:
             continue
@@ -101,13 +111,15 @@ def get_wrong_ins(pred, test_data, word2id, id2word, id2rel, use_neg=True):
             ins = wrong_labeled_ins[idx][wrong_labeled_ins[idx] != blank_id]
             sen = []
             for id in ins:
-                sen.append(id2word[id].encode('utf8'))
+                sen.append(id2x[id].encode('utf8'))
             wrong_ins.append(''.join(sen))
-            wrong_ins_e1.append(id2word[wrong_labeled_ins[idx][wrong_labeled_e1p[idx]]].encode('utf8'))
-            wrong_ins_e2.append(id2word[wrong_labeled_ins[idx][wrong_labeled_e2p[idx]]].encode('utf8'))
+            wrong_ins_e1.append(id2x[wrong_labeled_ins[idx][wrong_labeled_e1p[idx]]].encode('utf8'))
+            wrong_ins_e2.append(id2x[wrong_labeled_ins[idx][wrong_labeled_e2p[idx]]].encode('utf8'))
             wrong_ins_lab.append(id2rel[wrong_labeled_lab[idx]])
             wrong_ins_pre.append(id2rel[wrong_labeled_pre[idx]])
+
     wrong_labeled = zip(wrong_ins_lab, wrong_ins_pre, wrong_ins_e1, wrong_ins_e2, wrong_ins)
+
     return wrong_labeled
 
 

@@ -10,33 +10,48 @@ from models import *
 from evaluate import *
 
 ms_dict = {
-    'cnn': CNNSetting,
-    'rnn': RNNSetting,
-    'birnn': RNNSetting,
-    'birnn_att': RNNSetting,
-    'rnn_mi': RNNMiSetting
+    'cnn': CnnSetting,
+    'gru': RnnSetting,
+    'bigru': RnnSetting,
+    'bigru_att': RnnSetting,
+    'bigru_selfatt': RnnSetting,
+    'bigru_att_mi': RnnMiSetting
 }
+
 m_dict = {
-    'cnn': CNN,
-    'rnn': RNN,
-    'birnn': BiRNN,
-    'birnn_att': BiRNN_ATT,
-    'rnn_mi': RNN_MI
+    'cnn': Cnn,
+    'gru': Gru,
+    'bigru': BiGru,
+    'bigru_att': BiGru_Att,
+    'bigru_selfatt': BiGru_SelfAtt,
+    'bigru_att_mi': BiGru_Mi
 }
 
 
 def main():
-    model_name = 'rnn_mi'
+    """
+    initialize, train and evaluate models
+    """
+    model_name = 'cnn'
+    # character level
+    c_feature = True
     train_epochs_num = 100
     batch_size = 128
 
-    with open('./data/id2word.pkl', 'rb') as f:
-        id2word = cPickle.load(f)
-    with open('./data/word2id.pkl', 'rb') as f:
-        word2id = cPickle.load(f)
+    if c_feature:
+        with open('./data/id2char.pkl', 'rb') as f:
+            id2x = cPickle.load(f)
+        with open('./data/char2id.pkl', 'rb') as f:
+            x2id = cPickle.load(f)
+    else:
+        with open('./data/id2word.pkl', 'rb') as f:
+            id2x = cPickle.load(f)
+        with open('./data/word2id.pkl', 'rb') as f:
+            x2id = cPickle.load(f)
     with open('./origin_data/idx2rel.pkl', 'rb') as f:
         id2rel = cPickle.load(f)
 
+    # result saving path
     res_path = os.path.join('./result', model_name)
     if not os.path.exists(res_path):
         os.makedirs(res_path)
@@ -45,20 +60,36 @@ def main():
     log_prf = tf.gfile.GFile(res_prf, mode='a')
     log_ana = tf.gfile.GFile(res_ana, mode='a')
 
-    best_f1 = 0
+    # basic model setting
+    model_setting = ms_dict[model_name]()
+
+    # if the model is an multi-instance model
     if '_mi' not in model_name:
-        model_setting = ms_dict[model_name]()
+        # initialize data loader
+        print 'data loader initializing...'
         if 'cnn' in model_name:
-            data_loader = DataLoader('./data', multi_ins=False, cnn_win_size=model_setting.win_size)
+            data_loader = DataLoader(
+                './data', c_feature=c_feature, multi_ins=False, cnn_win_size=model_setting.win_size
+            )
         else:
-            data_loader = DataLoader('./data', multi_ins=False)
-        model = m_dict[model_name](data_loader.wordembedding, model_setting)
+            data_loader = DataLoader('./data', c_feature=c_feature, multi_ins=False)
+
+        # update max sentence length
+        model_setting.sent_len = data_loader.max_sen_len
+
+        print model_setting.sen_len
+
+        # initialize model
+        model = m_dict[model_name](data_loader.embedding, model_setting)
+
         with tf.Session() as session:
             tf.global_variables_initializer().run()
             saver = tf.train.Saver(max_to_keep=None)
-            test_data = data_loader.get_test_data()
+            test_data = data_loader.get_test_all()
+            # best evaluation f1
+            best_f1 = 0
             for epoch_num in range(train_epochs_num):
-                # train
+                # training
                 iter_num = 0
                 batches = data_loader.get_train_batches(batch_size=batch_size)
                 for batch in batches:
@@ -68,16 +99,17 @@ def main():
                     if iter_num % 100 == 0:
                         _, prf_macro, _ = get_p_r_f1(c_label, batch.y)
                         p, r, f1 = prf_macro
-                        log_info = 'train: ' + str(datetime.now()) + 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, ' \
-                                                                     'p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
+                        log_info = 'train: ' + str(datetime.now()) + ' epoch: {:>3}, batch: {:>4}, lost: {:.3f},' \
+                                                                     ' p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
                             epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
                         )
                         log_prf.write(log_info)
-                        print 'train: ', datetime.now(), 'epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, ' \
-                                                         'r: {:.3f}%, f1:{:.3f}%'.format(
+                        print 'train: ', datetime.now(), ' epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%,' \
+                                                         ' r: {:.3f}%, f1:{:.3f}%'.format(
                             epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
                         )
-                # test
+
+                # evaluate after each epoch
                 use_neg = True
                 test_loss, test_pred, test_prob = model.evaluate(session, test_data)
                 prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_data.y, use_neg)
@@ -86,33 +118,40 @@ def main():
                                                             ' f1:{:.3f}%\n'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100
                 )
+
+                # best performance
                 if f1 > best_f1:
                     best_f1 = f1
                     # record p, r, f1
                     log_ana.write(log_info)
                     if use_neg:
-                        for id in range(len(prf_list)):
+                        for idx in range(len(prf_list)):
                             rel_prf = 'rel: {:>2}_{:<6}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
-                                id, id2rel[id], prf_list[id][3] * 100, prf_list[id][4] * 100, prf_list[id][5] * 100
+                                idx, id2rel[idx], prf_list[idx][3] * 100, prf_list[idx][4] * 100, prf_list[idx][5] * 100
                             )
                             log_ana.write(rel_prf)
                     else:
-                        for id in range(len(prf_list)):
+                        for idx in range(len(prf_list)):
                             rel_prf = 'rel: {}_{}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
-                                id+1, id2rel[id+1], prf_list[id][3] * 100, prf_list[id][4] * 100, prf_list[id][5] * 100
+                                idx+1, id2rel[idx+1],
+                                prf_list[idx][3] * 100, prf_list[idx][4] * 100, prf_list[idx][5] * 100
                             )
                             log_ana.write(rel_prf)
+
                     # record wrong instance
-                    wrong_ins = get_wrong_ins(test_pred, test_data, word2id, id2word, id2rel, use_neg)
+                    wrong_ins = get_wrong_ins(test_pred, test_data, x2id, id2x, id2rel, use_neg)
                     wrong_ins = sorted(wrong_ins, key=lambda x: x[1])
                     wrong_ins = ['\t'.join(i) + '\n' for i in wrong_ins]
                     for ins in wrong_ins:
                         log_ana.write(ins)
                     log_ana.write('-' * 80 + '\n')
+
                     # draw pr curve
-                    prc_fn = os.path.join(res_path, 'prc_epoch{}.png'.format(epoch_num))
-                    save_prcurve(test_prob, test_data.y, model_name, prc_fn)
-                    saver.save(session, os.path.join(res_path, 'model_saved'))
+                    # prc_fn = os.path.join(res_path, 'prc_epoch{}.png'.format(epoch_num))
+                    # save_prcurve(test_prob, test_data.y, model_name, prc_fn)
+
+                    # save model
+                    saver.save(session, os.path.join(res_path, 'model_saved'), epoch_num)
 
                 log_prf.write(log_info)
                 print 'test: ', datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
@@ -122,16 +161,16 @@ def main():
         data_loader = DataLoader('./data', multi_ins=True)
         batch_size = 128
         print 'building {} model...'.format(model_name)
-        rnn_mi_setting = RNNMiSetting()
+        rnn_mi_setting = RnnMiSetting()
         rnn_mi_setting.bag_num = batch_size
-        rnn_mi_model = RNN_MI(data_loader.wordembedding, rnn_mi_setting)
+        rnn_mi_model = BiGru_Mi(data_loader.embedding, rnn_mi_setting)
 
         with tf.Session() as session:
             tf.global_variables_initializer().run()
             for epoch_num in range(train_epochs_num):
                 iter_num = 0
                 train_batches = data_loader.get_train_batches(batch_size=batch_size)
-                test_batches = data_loader.get_test_batches(batch_size=batch_size, use_single=True)
+                test_batches = data_loader.get_test_batches(batch_size=batch_size)
                 for batch in train_batches:
                     iter_num += 1
                     acc, loss = rnn_mi_model.fit(session, batch, dropout_keep_rate=0.5)
