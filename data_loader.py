@@ -39,6 +39,7 @@ class DataLoader(object):
     """
     def __init__(self, data_dir, c_feature=False, multi_ins=False, cnn_win_size=0):
 
+        self.c_feature = c_feature
         if c_feature:
             self.embedding = np.load('{}/char_vec.npy'.format(data_dir))
 

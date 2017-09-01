@@ -11,20 +11,20 @@ from evaluate import *
 
 ms_dict = {
     'cnn': CnnSetting,
-    'gru': RnnSetting,
-    'bigru': RnnSetting,
-    'bigru_att': RnnSetting,
-    'bigru_selfatt': RnnSetting,
-    'bigru_att_mi': RnnMiSetting
+    'rnn': RnnSetting,
+    'birnn': RnnSetting,
+    'birnn_att': RnnSetting,
+    'birnn_selfatt': RnnSetting,
+    'birnn_att_mi': RnnMiSetting
 }
 
 m_dict = {
     'cnn': Cnn,
-    'gru': Gru,
-    'bigru': BiGru,
-    'bigru_att': BiGru_Att,
-    'bigru_selfatt': BiGru_SelfAtt,
-    'bigru_att_mi': BiGru_Mi
+    'rnn': Rnn,
+    'birnn': BiRnn,
+    'birnn_att': BiRnn_Att,
+    'birnn_selfatt': BiRnn_SelfAtt,
+    'birnn_att_mi': BiRnn_Mi
 }
 
 
@@ -50,50 +50,32 @@ def get_ids(c_feature):
     return x2id, id2x, id2rel
 
 
-def main():
+def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_size):
     """
-    initialize, train and evaluate models
+    train and evaluate model
     """
-    model_name = 'gru'
-
-    # feature select
-    c_feature = True
-
-    # train and test parameters
-    train_epochs_num = 100
-    batch_size = 512
-
     # get indexes
-    x2id, id2x, id2rel = get_ids(c_feature)
+    x2id, id2x, id2rel = get_ids(data_loader.c_feature)
 
     # result saving path
-    res_path = os.path.join('./result', model_name, '{}_{}'.format(model_name, 'c' if c_feature else 'w'))
+    res_path = os.path.join(
+        './result', model.model_name, '{}_{}'.format(model.model_name, 'c' if data_loader.c_feature else 'w')
+    )
     if not os.path.exists(res_path):
         os.makedirs(res_path)
-    res_prf = os.path.join(res_path, 'prf.txt')
-    res_ana = os.path.join(res_path, 'analysis.txt')
-    log_prf = tf.gfile.GFile(res_prf, mode='a')
-    log_ana = tf.gfile.GFile(res_ana, mode='a')
 
-    # basic model setting
-    model_setting = ms_dict[model_name]()
-
-    # initialize data loader
-    print 'data loader initializing...'
-    mult_ins = True if '_mi' in model_name else False
-
-    if 'cnn' in model_name:
-        data_loader = DataLoader(
-            './data', c_feature=c_feature, multi_ins=mult_ins, cnn_win_size=model_setting.win_size
-        )
-    else:
-        data_loader = DataLoader('./data', c_feature=c_feature, multi_ins=mult_ins)
-
-    # update max sentence length
-    model_setting.sen_len = data_loader.max_sen_len
-
-    # initialize model
-    model = m_dict[model_name](data_loader.embedding, model_setting)
+    # log files
+    log_prf = tf.gfile.GFile(os.path.join(res_path, 'prf.txt'), mode='a')
+    log_ana = tf.gfile.GFile(os.path.join(res_path, 'analysis.txt'), mode='a')
+    log_prf.write('=' * 80 + '\n' + model.model_name + '\n')
+    log_ana.write('=' * 80 + '\n' + model.model_name + '\n')
+    for para in sorted(model_setting.__dict__.keys()):
+        pv_str = '{}: {}'.format(para, getattr(model_setting, para))
+        print pv_str
+        log_prf.write(pv_str + '\n')
+        log_ana.write(pv_str + '\n')
+    log_prf.write('=' * 80 + '\n')
+    log_ana.write('=' * 80 + '\n')
 
     with tf.Session() as session:
         tf.global_variables_initializer().run()
@@ -101,7 +83,7 @@ def main():
         # best evaluation f1
         best_test_f1 = 0
         for epoch_num in range(train_epochs_num):
-            # training
+            # train
             iter_num = 0
             batches = data_loader.get_train_batches(batch_size=batch_size)
             for batch in batches:
@@ -121,7 +103,7 @@ def main():
                         epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
                     )
 
-            # evaluate after each epoch
+            # test
             use_neg = True
             test_batches = data_loader.get_test_batches(batch_size)
             test_loss, test_prob, test_pred, test_ans = [], [], [], []
@@ -139,7 +121,7 @@ def main():
             prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_ans, use_neg)
             p, r, f1 = prf_macro
             log_info = 'test : ' + str(datetime.now()) + ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%,' \
-                                                        ' f1:{:.3f}%\n'.format(
+                                                         ' f1:{:.3f}%\n'.format(
                 epoch_num, test_loss, p * 100, r * 100, f1 * 100
             )
 
@@ -163,7 +145,7 @@ def main():
                         log_ana.write(rel_prf)
 
                 # record wrong instance multi-instance do no support this process
-                if not mult_ins:
+                if not data_loader.multi_ins:
                     wrong_ins = get_wrong_ins(
                         test_pred, test_ans, test_x, test_p1, test_p2, x2id, id2x, id2rel, use_neg
                     )
@@ -184,6 +166,46 @@ def main():
             print 'test : ', datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                 epoch_num, test_loss, p * 100, r * 100, f1 * 100
             )
+
+
+def main():
+    """
+    initialize, train and evaluate models
+    """
+    model_name = 'birnn_att'
+
+    # feature select
+    c_feature = True
+
+    # train and test parameters
+    train_epochs_num = 100
+    batch_size = 512
+
+    # model setting
+    model_setting = ms_dict[model_name]()
+
+    # initialize data loader
+    print 'data loader initializing...'
+    mult_ins = True if '_mi' in model_name else False
+
+    if 'cnn' in model_name:
+        data_loader = DataLoader(
+            './data', c_feature=c_feature, multi_ins=mult_ins, cnn_win_size=model_setting.win_size
+        )
+    else:
+        data_loader = DataLoader('./data', c_feature=c_feature, multi_ins=mult_ins)
+
+    # update max sentence length
+    model_setting.sen_len = data_loader.max_sen_len
+
+    # initialize model
+    print 'initializing {} model...'.format(model_name)
+    model = m_dict[model_name](data_loader.embedding, model_setting)
+
+    # train and evaluate
+    print 'training and evaluating model...'
+    train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_size)
+
 
 if __name__ == '__main__':
     main()

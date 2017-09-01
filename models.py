@@ -2,6 +2,12 @@
 # Created by han on 17-7-11
 import tensorflow as tf
 
+rnn_cell = {
+    'rnn': tf.nn.rnn_cell.BasicRNNCell,
+    'lstm': tf.nn.rnn_cell.LSTMCell,
+    'gru': tf.nn.rnn_cell.GRUCell
+}
+
 
 class Cnn(object):
     """
@@ -9,7 +15,7 @@ class Cnn(object):
     """
     def __init__(self, x_embedding, setting):
         # model name
-        self.model_name = 'CNN'
+        self.model_name = 'Cnn'
 
         # embedding matrix
         self.embed_matrix_x = tf.get_variable(
@@ -160,15 +166,135 @@ class Cnn(object):
         return model_loss, label_pred, label_prob
 
 
-class Gru(object):
+class Rnn(object):
     """
-    Basic GRU model.
+    Basic Rnn model.
     """
     def __init__(self, x_embedding, setting):
         # model name
-        self.model_name = 'GRU'
+        self.model_name = 'Rnn'
 
         # settings
+        self.cell_type = setting.cell
+        self.max_sentence_len = setting.sen_len
+        self.hidden_size = setting.hidden_size
+        self.class_num = setting.class_num
+        self.pos_num = setting.pos_num
+        self.pos_size = setting.pos_size
+        self.learning_rate = setting.learning_rate
+
+        # embedding matrix
+        self.embed_matrix_x = tf.get_variable(
+            'embed_matrix_x', x_embedding.shape,
+            initializer=tf.constant_initializer(x_embedding)
+        )
+        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
+        self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
+        self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
+
+        # inputs
+        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
+        self.input_sen_len = tf.placeholder(tf.int32, [None], name='input_sen_len')
+        self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
+
+        # position feature
+        self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
+        self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
+
+        # dropout keep probability
+        self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
+
+        # embedded
+        self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
+        self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
+        self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
+
+        # concat embeddings
+        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
+        self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis=1)
+
+        # states and outputs
+        with tf.name_scope('sentence_encoder'):
+            # cell
+            self.rnn_cell = rnn_cell[self.cell_type](self.hidden_size)
+            self.rnn_cell = tf.nn.rnn_cell.DropoutWrapper(self.rnn_cell, output_keep_prob=self.dropout_keep_rate)
+
+            # rnn
+            # self.outputs, self.states = tf.contrib.rnn.static_rnn(self.rnn_cell, self.emb_all_us, dtype=tf.float32)
+            self.outputs, self.states = tf.contrib.rnn.static_rnn(
+                self.rnn_cell, self.emb_all_us, dtype=tf.float32, sequence_length=self.input_sen_len
+            )
+
+        if setting.sen_emb_select == 'last':
+            self.output_final = self.outputs[-1]
+        elif setting.sen_emb_select == 'mean':
+            self.output_final = tf.reduce_mean(self.outputs)
+
+        # softmax
+        with tf.name_scope('softmax'):
+            # full connection layer before softmax
+            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
+            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
+            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
+            self.softmax_res = tf.nn.softmax(self.softmax_pred)
+
+        # get max softmax predict result of each relation
+        self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
+
+        # class label
+        self.class_label = tf.argmax(self.softmax_res, 1)
+
+        # choose the min loss instance index
+        self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.softmax_pred, labels=self.input_labels)
+        self.min_loss_idx = tf.argmin(self.instance_loss, 0)
+
+        # model loss
+        self.model_loss = tf.reduce_mean(self.instance_loss)
+
+        # optimizer
+        if self.learning_rate:
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
+        else:
+            self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
+
+        # # saver
+        # self.saver = tf.train.Saver(tf.global_variables())
+
+    def fit(self, session, input_data, dropout_keep_rate):
+        feed_dict = {self.input_sen: input_data.x,
+                     self.input_sen_len: input_data.slen,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: dropout_keep_rate
+                     }
+        session.run(self.optimizer, feed_dict=feed_dict)
+        model_loss = session.run(self.model_loss, feed_dict=feed_dict)
+        return model_loss
+
+    def evaluate(self, session, input_data):
+        feed_dict = {self.input_sen: input_data.x,
+                     self.input_sen_len: input_data.slen,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: 1}
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
+
+
+class BiRnn(object):
+    """
+    Bidirectional RNN model.
+    """
+    def __init__(self, x_embedding, setting):
+        # model name
+        self.model_name = 'BiRnn'
+
+        # settings
+        self.cell_type = setting.cell
         self.max_sentence_len = setting.sen_len
         self.hidden_size = setting.hidden_size
         self.class_num = setting.class_num
@@ -208,117 +334,8 @@ class Gru(object):
         # states and outputs
         with tf.name_scope('sentence_encoder'):
             # cell
-            self.rnn_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
-            self.rnn_cell = tf.nn.rnn_cell.DropoutWrapper(self.rnn_cell, output_keep_prob=self.dropout_keep_rate)
-
-            # rnn
-            self.outputs, self.states = tf.contrib.rnn.static_rnn(self.rnn_cell, self.emb_all_us, dtype=tf.float32)
-
-        self.output_final = self.outputs[-1]
-
-        # softmax
-        with tf.name_scope('softmax'):
-            # full connection layer before softmax
-            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
-            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
-            self.softmax_res = tf.nn.softmax(self.softmax_pred)
-
-        # get max softmax predict result of each relation
-        self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
-
-        # class label
-        self.class_label = tf.argmax(self.softmax_res, 1)
-
-        # choose the min loss instance index
-        self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.softmax_pred, labels=self.input_labels)
-        self.min_loss_idx = tf.argmin(self.instance_loss, 0)
-
-        # model loss
-        self.model_loss = tf.reduce_mean(self.instance_loss)
-
-        # optimizer
-        if self.learning_rate:
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
-        else:
-            self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
-
-        # # saver
-        # self.saver = tf.train.Saver(tf.global_variables())
-
-    def fit(self, session, input_data, dropout_keep_rate):
-        feed_dict = {self.input_sen: input_data.x,
-                     self.input_pos1: input_data.pos1,
-                     self.input_pos2: input_data.pos2,
-                     self.input_labels: input_data.y,
-                     self.dropout_keep_rate: dropout_keep_rate
-                     }
-        session.run(self.optimizer, feed_dict=feed_dict)
-        model_loss = session.run(self.model_loss, feed_dict=feed_dict)
-        return model_loss
-
-    def evaluate(self, session, input_data):
-        feed_dict = {self.input_sen: input_data.x,
-                     self.input_pos1: input_data.pos1,
-                     self.input_pos2: input_data.pos2,
-                     self.input_labels: input_data.y,
-                     self.dropout_keep_rate: 1}
-        model_loss, label_pred, label_prob = session.run(
-            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
-        )
-        return model_loss, label_pred, label_prob
-
-
-class BiGru(object):
-    """
-    Bidirectional GRU model.
-    """
-    def __init__(self, x_embedding, setting):
-        # model name
-        self.model_name = 'BiGRU'
-
-        # settings
-        self.max_sentence_len = setting.sen_len
-        self.hidden_size = setting.hidden_size
-        self.class_num = setting.class_num
-        self.pos_num = setting.pos_num
-        self.pos_size = setting.pos_size
-        self.learning_rate = setting.learning_rate
-
-        # embedding matrix
-        self.embed_matrix_x = tf.get_variable(
-            'embed_matrix_x', x_embedding.shape,
-            initializer=tf.constant_initializer(x_embedding)
-        )
-        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
-        self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
-        self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
-
-        # inputs
-        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
-        self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
-
-        # position feature
-        self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
-        self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
-
-        # dropout keep probability
-        self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
-
-        # embedded
-        self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
-        self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
-        self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
-
-        # concat embeddings
-        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
-        self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis = 1)
-
-        # states and outputs
-        with tf.name_scope('sentence_encoder'):
-            # cell
-            self.foward_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
-            self.backward_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
+            self.foward_cell = rnn_cell[self.cell_type](self.hidden_size)
+            self.backward_cell = rnn_cell[self.cell_type](self.hidden_size)
             self.foward_cell = tf.nn.rnn_cell.DropoutWrapper(self.foward_cell, output_keep_prob=self.dropout_keep_rate)
             self.backward_cell = tf.nn.rnn_cell.DropoutWrapper(self.backward_cell, output_keep_prob=self.dropout_keep_rate)
 
@@ -327,7 +344,10 @@ class BiGru(object):
                 self.foward_cell, self.backward_cell, self.emb_all_us, dtype=tf.float32
             )
 
-            self.output_final = self.outputs[-1]
+            if setting.sen_emb_select == 'last':
+                self.output_final = self.outputs[-1]
+            elif setting.sen_emb_select == 'mean':
+                self.output_final = tf.reduce_mean(self.outputs)
 
         # softmax
         with tf.name_scope('softmax'):
@@ -381,12 +401,13 @@ class BiGru(object):
         return model_loss, label_pred, label_prob
 
 
-class BiGru_Att(object):
+class BiRnn_Att(object):
     def __init__(self, x_embedding, setting):
         # model name
-        self.model_name = 'BiRNN_ATT'
+        self.model_name = 'BiRnn_Att'
 
         # settings
+        self.cell_type = setting.cell
         self.max_sentence_len = setting.sen_len
         self.hidden_size = setting.hidden_size
         self.class_num = setting.class_num
@@ -426,8 +447,8 @@ class BiGru_Att(object):
         # states and outputs
         with tf.name_scope('sentence_encoder'):
             # cell
-            self.foward_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
-            self.backward_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
+            self.foward_cell = rnn_cell[self.cell_type](self.hidden_size)
+            self.backward_cell = rnn_cell[self.cell_type](self.hidden_size)
             self.foward_cell = tf.nn.rnn_cell.DropoutWrapper(self.foward_cell, output_keep_prob=self.dropout_keep_rate)
             self.backward_cell = tf.nn.rnn_cell.DropoutWrapper(self.backward_cell, output_keep_prob=self.dropout_keep_rate)
 
@@ -479,7 +500,9 @@ class BiGru_Att(object):
         self.min_loss_idx = tf.argmin(self.instance_loss, 0)
 
         # model loss
-        self.model_loss = tf.reduce_mean(self.instance_loss)
+        self.l2_loss = tf.contrib.layers.apply_regularization(regularizer=tf.contrib.layers.l2_regularizer(0.0001),
+                                                              weights_list=tf.trainable_variables())
+        self.model_loss = tf.reduce_mean(self.instance_loss) + self.l2_loss
 
         # optimizer
         if self.learning_rate:
@@ -513,12 +536,13 @@ class BiGru_Att(object):
         return model_loss, label_pred, label_prob
 
 
-class BiGru_SelfAtt(object):
+class BiRnn_SelfAtt(object):
     def __init__(self, x_embedding, setting):
         # model name
-        self.model_name = 'BiRNN_ATT'
+        self.model_name = 'BiRnn_SelfAtt'
 
         # settings
+        self.cell_type = setting.cell
         self.max_sentence_len = setting.sen_len
         self.hidden_size = setting.hidden_size
         self.class_num = setting.class_num
@@ -558,8 +582,8 @@ class BiGru_SelfAtt(object):
         # states and outputs
         with tf.name_scope('sentence_encoder'):
             # cell
-            self.foward_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
-            self.backward_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
+            self.foward_cell = rnn_cell[self.cell_type](self.hidden_size)
+            self.backward_cell = rnn_cell[self.cell_type](self.hidden_size)
             self.foward_cell = tf.nn.rnn_cell.DropoutWrapper(self.foward_cell, output_keep_prob=self.dropout_keep_rate)
             self.backward_cell = tf.nn.rnn_cell.DropoutWrapper(self.backward_cell, output_keep_prob=self.dropout_keep_rate)
 
@@ -645,12 +669,13 @@ class BiGru_SelfAtt(object):
         return model_loss, label_pred, label_prob
 
 
-class BiGru_Mi(object):
+class BiRnn_Mi(object):
     def __init__(self, x_embedding, setting):
         # model name
-        self.model_name = 'RNN_MI'
+        self.model_name = 'BiRnn_Mi'
 
         # settings
+        self.cell_type = setting.cell
         self.max_sentence_len = setting.sen_len
         self.hidden_size = setting.hidden_size
         self.class_num = setting.class_num
@@ -695,13 +720,19 @@ class BiGru_Mi(object):
         # states and outputs
         with tf.name_scope('sentence_encoder'):
             # cell
-            # self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_size, forget_bias=0.0, state_is_tuple=True)
-            self.rnn_cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
-            self.rnn_cell = tf.nn.rnn_cell.DropoutWrapper(self.rnn_cell, output_keep_prob=self.dropout_keep_rate)
+            self.foward_cell = rnn_cell[self.cell_type](self.hidden_size)
+            self.backward_cell = rnn_cell[self.cell_type](self.hidden_size)
+            self.foward_cell = tf.nn.rnn_cell.DropoutWrapper(
+                self.foward_cell, output_keep_prob=self.dropout_keep_rate
+            )
+            self.backward_cell = tf.nn.rnn_cell.DropoutWrapper(
+                self.backward_cell, output_keep_prob=self.dropout_keep_rate
+            )
 
             # rnn
-            self.outputs, self.states = tf.contrib.rnn.static_rnn(self.rnn_cell, self.emb_all_us, dtype=tf.float32)
-
+            self.outputs, _, _ = tf.contrib.rnn.static_bidirectional_rnn(
+                self.foward_cell, self.backward_cell, self.emb_all_us, dtype=tf.float32
+            )
             self.sen_emb = self.outputs[-1]
 
         with tf.name_scope('sentence_attention'):
