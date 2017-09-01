@@ -26,7 +26,23 @@ class RnnSetting(object):
         self.layers = 1
         self.learning_rate = None
         self.dropout_rate = 0.5
-        self.sen_emb_select = 'last'
+        self.hidden_select = 'avg'
+
+
+class RnnSetting_SelfAtt(object):
+    def __init__(self):
+        self.cell = 'gru'
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.hidden_size = 200
+        self.layers = 1
+        self.learning_rate = None
+        self.dropout_rate = 0.5
+        # self attention hyper parameters
+        self.da = 400
+        self.r = 31
 
 
 class RnnMiSetting(object):
@@ -41,4 +57,4 @@ class RnnMiSetting(object):
         self.learning_rate = None
         self.dropout_rate = 0.5
         self.bag_num = None
-        self.sen_emb_select = 'last'
+        self.hidden_select = 'last'

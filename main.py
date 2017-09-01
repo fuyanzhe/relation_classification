@@ -14,7 +14,7 @@ ms_dict = {
     'rnn': RnnSetting,
     'birnn': RnnSetting,
     'birnn_att': RnnSetting,
-    'birnn_selfatt': RnnSetting,
+    'birnn_selfatt': RnnSetting_SelfAtt,
     'birnn_att_mi': RnnMiSetting
 }
 
@@ -163,7 +163,7 @@ def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_si
                 saver.save(session, os.path.join(res_path, 'model_saved'), epoch_num)
 
             log_prf.write(log_info)
-            print 'test : ', datetime.now(), 'epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
+            print 'test : ', datetime.now(), ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                 epoch_num, test_loss, p * 100, r * 100, f1 * 100
             )
 
@@ -172,13 +172,13 @@ def main():
     """
     initialize, train and evaluate models
     """
-    model_name = 'birnn_att'
+    model_name = 'cnn'
 
     # feature select
-    c_feature = True
+    c_feature = False
 
     # train and test parameters
-    train_epochs_num = 100
+    train_epochs_num = 10
     batch_size = 512
 
     # model setting

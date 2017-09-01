@@ -194,7 +194,6 @@ class Rnn(object):
 
         # inputs
         self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
-        self.input_sen_len = tf.placeholder(tf.int32, [None], name='input_sen_len')
         self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
 
         # position feature
@@ -220,15 +219,16 @@ class Rnn(object):
             self.rnn_cell = tf.nn.rnn_cell.DropoutWrapper(self.rnn_cell, output_keep_prob=self.dropout_keep_rate)
 
             # rnn
-            # self.outputs, self.states = tf.contrib.rnn.static_rnn(self.rnn_cell, self.emb_all_us, dtype=tf.float32)
             self.outputs, self.states = tf.contrib.rnn.static_rnn(
-                self.rnn_cell, self.emb_all_us, dtype=tf.float32, sequence_length=self.input_sen_len
+                self.rnn_cell, self.emb_all_us, dtype=tf.float32
             )
 
-        if setting.sen_emb_select == 'last':
+        if setting.hidden_select == 'last':
             self.output_final = self.outputs[-1]
-        elif setting.sen_emb_select == 'mean':
-            self.output_final = tf.reduce_mean(self.outputs)
+        elif setting.hidden_select == 'avg':
+            self.output_final = tf.reduce_mean(
+                tf.reshape(tf.concat(self.outputs, 1), [-1, self.max_sentence_len, self.hidden_size]), axis=1
+            )
 
         # softmax
         with tf.name_scope('softmax'):
@@ -262,7 +262,6 @@ class Rnn(object):
 
     def fit(self, session, input_data, dropout_keep_rate):
         feed_dict = {self.input_sen: input_data.x,
-                     self.input_sen_len: input_data.slen,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -274,7 +273,6 @@ class Rnn(object):
 
     def evaluate(self, session, input_data):
         feed_dict = {self.input_sen: input_data.x,
-                     self.input_sen_len: input_data.slen,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -344,10 +342,12 @@ class BiRnn(object):
                 self.foward_cell, self.backward_cell, self.emb_all_us, dtype=tf.float32
             )
 
-            if setting.sen_emb_select == 'last':
+            if setting.hidden_select == 'last':
                 self.output_final = self.outputs[-1]
-            elif setting.sen_emb_select == 'mean':
-                self.output_final = tf.reduce_mean(self.outputs)
+            elif setting.hidden_select == 'avg':
+                self.output_final = tf.reduce_mean(
+                    tf.reshape(tf.concat(self.outputs, 1), [-1, self.max_sentence_len, self.hidden_size]), axis=1
+                )
 
         # softmax
         with tf.name_scope('softmax'):
@@ -577,52 +577,55 @@ class BiRnn_SelfAtt(object):
 
         # concat embeddings
         self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
-        self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis = 1)
+        self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis=1)
 
         # states and outputs
         with tf.name_scope('sentence_encoder'):
-            # cell
-            self.foward_cell = rnn_cell[self.cell_type](self.hidden_size)
-            self.backward_cell = rnn_cell[self.cell_type](self.hidden_size)
-            self.foward_cell = tf.nn.rnn_cell.DropoutWrapper(self.foward_cell, output_keep_prob=self.dropout_keep_rate)
-            self.backward_cell = tf.nn.rnn_cell.DropoutWrapper(self.backward_cell, output_keep_prob=self.dropout_keep_rate)
-
             # rnn
             with tf.name_scope('birnn'):
+                # cell
+                self.foward_cell = rnn_cell[self.cell_type](self.hidden_size)
+                self.backward_cell = rnn_cell[self.cell_type](self.hidden_size)
+                self.foward_cell = tf.nn.rnn_cell.DropoutWrapper(self.foward_cell,
+                                                                 output_keep_prob=self.dropout_keep_rate)
+                self.backward_cell = tf.nn.rnn_cell.DropoutWrapper(self.backward_cell,
+                                                                   output_keep_prob=self.dropout_keep_rate)
                 self.outputs, _, _ = tf.contrib.rnn.static_bidirectional_rnn(
                     self.foward_cell, self.backward_cell, self.emb_all_us, dtype=tf.float32
                 )
-
-            outputs_forward = [i[:, :self.hidden_size] for i in self.outputs]
-            outputs_backward = [i[:, self.hidden_size:] for i in self.outputs]
-            output_forward = tf.reshape(tf.concat(axis=1, values=outputs_forward), [-1, self.max_sentence_len, self.hidden_size])
-            output_backward = tf.reshape(tf.concat(axis=1, values=outputs_backward), [-1, self.max_sentence_len, self.hidden_size])
-
-            self.output_h = tf.add(output_forward, output_backward)
+                self.output_h = tf.reshape(
+                    tf.concat(self.outputs, 1), [-1, self.max_sentence_len, self.hidden_size * 2]
+                )
 
             # attention
             with tf.name_scope('attention'):
-                self.attention_w = tf.get_variable('attention_omega', [self.hidden_size, 1])
-                self.attention_A = tf.reshape(
-                    tf.nn.softmax(
+                self.attention_Ws1 = tf.get_variable('attention_Ws1', [self.hidden_size * 2, setting.da])
+                self.attention_Ws2 = tf.get_variable('attention_Ws2', [setting.da, setting.r])
+                self.attention_A = tf.nn.softmax(
+                    tf.transpose(
                         tf.reshape(
                             tf.matmul(
-                                tf.reshape(tf.tanh(self.output_h), [-1, self.hidden_size]),
-                                self.attention_w
+                                tf.tanh(
+                                    tf.matmul(tf.reshape(self.output_h, [-1, self.hidden_size * 2]), self.attention_Ws1)
+                                ),
+                                self.attention_Ws2,
                             ),
-                            [-1, self.max_sentence_len]
-                        )
+                            [-1, self.max_sentence_len, setting.r]
+                        ),
+                        [0, 2, 1]
                     ),
-                    [-1, 1, self.max_sentence_len]
                 )
-                self.output_final = tf.reshape(tf.matmul(self.attention_A, self.output_h), [-1, self.hidden_size])
+
+                self.M = tf.matmul(self.attention_A, self.output_h)
+
+            with tf.name_scope('full_connection'):
+                self.fc_w = tf.get_variable('fc_W', [self.hidden_size * 2, self.class_num])
+                self.fc_b = tf.get_variable('fc_b', [self.class_num])
+                self.sen_rep = tf.matmul(self.M, self.fc_w) + self.fc_b
 
         # softmax
         with tf.name_scope('softmax'):
-            self.softmax_w = tf.get_variable('softmax_W', [self.hidden_size, self.class_num])
-            self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
-            self.softmax_pred = tf.matmul(self.output_final, self.softmax_w) + self.softmax_b
-            self.softmax_res = tf.nn.softmax(self.softmax_pred)
+            self.softmax_res = tf.nn.softmax(self.sen_rep)
 
         # get max softmax predict result of each relation
         self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
@@ -631,11 +634,21 @@ class BiRnn_SelfAtt(object):
         self.class_label = tf.argmax(self.softmax_res, 1)
 
         # choose the min loss instance index
-        self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.softmax_pred, labels=self.input_labels)
+        self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.sen_rep, labels=self.input_labels)
         self.min_loss_idx = tf.argmin(self.instance_loss, 0)
 
+        # Frobenius norm
+        self.P_matrix = tf.matmul(
+            self.attention_A,
+            tf.transpose(self.attention_A, [0, 2, 1])
+        ) - tf.eye(self.max_sentence_len, self.max_sentence_len)
+        # self.P_loss = tf.pow(
+        #     tf.norm(self.P_matrix, ord='fro', axis=1), [-2, -1]
+        # )
+        self.P_loss = tf.reduce_sum(self.P_matrix)
+
         # model loss
-        self.model_loss = tf.reduce_mean(self.instance_loss)
+        self.model_loss = tf.reduce_mean(self.instance_loss) + 0.001 * self.P_loss
 
         # optimizer
         if self.learning_rate:
@@ -824,7 +837,20 @@ class BiRnn_Mi(object):
         return model_accuracy, model_loss
 
     def evaluate(self, session, input_data):
-        total_shape = range(len(input_data.word) + 1)
+        total_shape = [0]
+        total_num = 0
+        total_x = []
+        total_pos1 = []
+        total_pos2 = []
+        for bag_idx in range(len(input_data.x)):
+            total_num += len(input_data.word[bag_idx])
+            total_shape.append(total_num)
+            for sent in input_data.word[bag_idx]:
+                total_x.append(sent)
+            for pos1 in input_data.pos1[bag_idx]:
+                total_pos1.append(pos1)
+            for pos2 in input_data.pos2[bag_idx]:
+                total_pos2.append(pos2)
         feed_dict = {
             self.bag_shapes: total_shape,
             self.input_sen: input_data.x,
