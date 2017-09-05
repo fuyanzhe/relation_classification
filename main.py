@@ -3,6 +3,7 @@
 
 import os
 import cPickle
+import time
 from datetime import datetime
 from data_loader import DataLoader
 from model_settings import *
@@ -15,7 +16,7 @@ ms_dict = {
     'birnn': RnnSetting,
     'birnn_att': RnnSetting,
     'birnn_selfatt': RnnSetting_SelfAtt,
-    'birnn_att_mi': RnnMiSetting
+    'birnn_mi': RnnMiSetting
 }
 
 m_dict = {
@@ -24,7 +25,7 @@ m_dict = {
     'birnn': BiRnn,
     'birnn_att': BiRnn_Att,
     'birnn_selfatt': BiRnn_SelfAtt,
-    'birnn_att_mi': BiRnn_Mi
+    'birnn_mi': BiRnn_Mi
 }
 
 
@@ -59,7 +60,11 @@ def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_si
 
     # result saving path
     res_path = os.path.join(
-        './result', model.model_name, '{}_{}'.format(model.model_name, 'c' if data_loader.c_feature else 'w')
+        './result', model.model_name, '{}_{}_'.format(
+            model.model_name,
+            'c' if data_loader.c_feature else 'w',
+            time.strftime('%y%m%d_%H%M', time.localtime(time.time()))
+        )
     )
     if not os.path.exists(res_path):
         os.makedirs(res_path)
@@ -114,9 +119,10 @@ def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_si
                 test_prob += list(batch_prob)
                 test_pred += list(batch_pred)
                 test_ans += list(batch.y)
-                test_x += list(batch.x)
-                test_p1 += list(batch.pos1[:, 0])
-                test_p2 += list(batch.pos2[:, 0])
+                if not data_loader.multi_ins:
+                    test_x += list(batch.x)
+                    test_p1 += list(batch.pos1[:, 0])
+                    test_p2 += list(batch.pos2[:, 0])
             test_loss = np.mean(test_loss)
             prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_ans, use_neg)
             p, r, f1 = prf_macro
@@ -172,14 +178,14 @@ def main():
     """
     initialize, train and evaluate models
     """
-    model_name = 'cnn'
+    model_name = 'birnn_selfatt'
 
     # feature select
     c_feature = False
 
     # train and test parameters
     train_epochs_num = 10
-    batch_size = 512
+    batch_size = 1024
 
     # model setting
     model_setting = ms_dict[model_name]()
@@ -195,8 +201,10 @@ def main():
     else:
         data_loader = DataLoader('./data', c_feature=c_feature, multi_ins=mult_ins)
 
-    # update max sentence length
+    # update model setting
     model_setting.sen_len = data_loader.max_sen_len
+    if mult_ins:
+        model_setting.bag_num = batch_size
 
     # initialize model
     print 'initializing {} model...'.format(model_name)

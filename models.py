@@ -638,17 +638,12 @@ class BiRnn_SelfAtt(object):
         self.min_loss_idx = tf.argmin(self.instance_loss, 0)
 
         # Frobenius norm
-        self.P_matrix = tf.matmul(
-            self.attention_A,
-            tf.transpose(self.attention_A, [0, 2, 1])
-        ) - tf.eye(self.max_sentence_len, self.max_sentence_len)
-        # self.P_loss = tf.pow(
-        #     tf.norm(self.P_matrix, ord='fro', axis=1), [-2, -1]
-        # )
-        self.P_loss = tf.reduce_sum(self.P_matrix)
+        self.P_matrix = tf.matmul(self.attention_A, tf.transpose(self.attention_A, [0, 2, 1])) - tf.eye(
+            self.max_sentence_len, self.max_sentence_len)
+        self.P_loss = tf.pow(tf.norm(self.P_matrix), 2)
 
         # model loss
-        self.model_loss = tf.reduce_mean(self.instance_loss) + 0.001 * self.P_loss
+        self.model_loss = tf.reduce_mean(self.instance_loss) + 0.0001 * self.P_loss
 
         # optimizer
         if self.learning_rate:
@@ -760,9 +755,9 @@ class BiRnn_Mi(object):
             self.accuracy = []
             self.total_loss = 0.0
 
-            self.sen_a = tf.get_variable('attention_A', [self.hidden_size])
-            self.sen_r = tf.get_variable('query_r', [self.hidden_size, 1])
-            relation_embedding = tf.get_variable('relation_embedding', [self.class_num, self.hidden_size])
+            self.sen_a = tf.get_variable('attention_A', [self.hidden_size * 2])
+            self.sen_r = tf.get_variable('query_r', [self.hidden_size * 2, 1])
+            relation_embedding = tf.get_variable('relation_embedding', [self.class_num, self.hidden_size * 2])
             sen_d = tf.get_variable('bias_d', [self.class_num])
 
             for i in range(self.bag_num):
@@ -778,7 +773,7 @@ class BiRnn_Mi(object):
                     )
                 )
 
-                sen_s.append(tf.reshape(tf.matmul(sen_alpha[i], sen_repre[i]), [self.hidden_size, 1]))
+                sen_s.append(tf.reshape(tf.matmul(sen_alpha[i], sen_repre[i]), [self.hidden_size * 2, 1]))
                 sen_out.append(tf.add(tf.reshape(tf.matmul(relation_embedding, sen_s[i]), [self.class_num]), sen_d))
 
                 self.prob.append(tf.nn.softmax(sen_out[i]))
@@ -816,9 +811,9 @@ class BiRnn_Mi(object):
         total_pos1 = []
         total_pos2 = []
         for bag_idx in range(len(input_data.x)):
-            total_num += len(input_data.word[bag_idx])
+            total_num += len(input_data.x[bag_idx])
             total_shape.append(total_num)
-            for sent in input_data.word[bag_idx]:
+            for sent in input_data.x[bag_idx]:
                 total_x.append(sent)
             for pos1 in input_data.pos1[bag_idx]:
                 total_pos1.append(pos1)
@@ -834,7 +829,7 @@ class BiRnn_Mi(object):
         }
         session.run(self.optimizer, feed_dict=feed_dict)
         model_accuracy, model_loss = session.run([self.accuracy, self.total_loss], feed_dict=feed_dict)
-        return model_accuracy, model_loss
+        return model_loss
 
     def evaluate(self, session, input_data):
         total_shape = [0]
@@ -843,9 +838,9 @@ class BiRnn_Mi(object):
         total_pos1 = []
         total_pos2 = []
         for bag_idx in range(len(input_data.x)):
-            total_num += len(input_data.word[bag_idx])
+            total_num += len(input_data.x[bag_idx])
             total_shape.append(total_num)
-            for sent in input_data.word[bag_idx]:
+            for sent in input_data.x[bag_idx]:
                 total_x.append(sent)
             for pos1 in input_data.pos1[bag_idx]:
                 total_pos1.append(pos1)
@@ -853,9 +848,9 @@ class BiRnn_Mi(object):
                 total_pos2.append(pos2)
         feed_dict = {
             self.bag_shapes: total_shape,
-            self.input_sen: input_data.x,
-            self.input_pos1: input_data.pos1,
-            self.input_pos2: input_data.pos2,
+            self.input_sen: total_x,
+            self.input_pos1: total_pos1,
+            self.input_pos2: total_pos2,
             self.input_labels: input_data.y,
             self.dropout_keep_rate: 1
         }

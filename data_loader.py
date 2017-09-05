@@ -111,7 +111,7 @@ class DataLoader(object):
                 train_x.append(self.train_x[idx_list])
                 train_len.append(self.train_len[idx_list])
                 train_p1.append(self.train_pos1[idx_list])
-                train_p1.append(self.train_pos2[idx_list])
+                train_p2.append(self.train_pos2[idx_list])
                 if cnn_win_size:
                     train_x_win.append(self.train_win[idx_list])
 
@@ -125,7 +125,7 @@ class DataLoader(object):
                 test_x.append(self.test_x[idx_list])
                 test_len.append(self.test_len[idx_list])
                 test_p1.append(self.test_pos1[idx_list])
-                test_p1.append(self.test_pos2[idx_list])
+                test_p2.append(self.test_pos2[idx_list])
                 if cnn_win_size:
                     test_x_win.append(self.test_win[idx_list])
 
@@ -142,12 +142,16 @@ class DataLoader(object):
         """
         get training data by batch
         """
-        train_order = range(len(self.train_y))
+        if self.multi_ins:
+            train_order = range(len(self.train_y_mi))
+        else:
+            train_order = range(len(self.train_y))
+
         random.shuffle(train_order)
         batch_num = int(len(train_order) / batch_size)
         for i in range(batch_num):
             batch_order = train_order[i * batch_size: (i + 1) * batch_size]
-            if self.train_win is not None:
+            if self.train_win:
                 batch = InputData(self.train_x[batch_order],
                                   self.train_pos1[batch_order],
                                   self.train_pos2[batch_order],
@@ -166,12 +170,16 @@ class DataLoader(object):
         """
         get testing data by batch
         """
-        test_order = range(len(self.test_y))
+        if self.multi_ins:
+            test_order = range(len(self.test_y_mi))
+        else:
+            test_order = range(len(self.test_y))
+
         random.shuffle(test_order)
         batch_num = int(len(test_order) / batch_size)
         for i in range(batch_num):
             batch_order = test_order[i * batch_size: (i + 1) * batch_size]
-            if self.test_win is not None:
+            if self.test_win:
                 batch = InputData(self.test_x[batch_order],
                                   self.test_pos1[batch_order],
                                   self.test_pos2[batch_order],
