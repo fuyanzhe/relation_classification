@@ -60,7 +60,7 @@ def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_si
 
     # result saving path
     res_path = os.path.join(
-        './result', model.model_name, '{}_{}_'.format(
+        './result', model.model_name, '{}_{}_{}'.format(
             model.model_name,
             'c' if data_loader.c_feature else 'w',
             time.strftime('%y%m%d_%H%M', time.localtime(time.time()))
@@ -178,13 +178,13 @@ def main():
     """
     initialize, train and evaluate models
     """
-    model_name = 'birnn_selfatt'
+    model_name = 'birnn_mi'
 
     # feature select
     c_feature = False
 
     # train and test parameters
-    train_epochs_num = 10
+    train_epochs_num = 200
     batch_size = 1024
 
     # model setting

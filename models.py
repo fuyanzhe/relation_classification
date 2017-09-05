@@ -640,7 +640,7 @@ class BiRnn_SelfAtt(object):
 
         # Frobenius norm
         self.P_matrix = tf.matmul(self.attention_A, tf.transpose(self.attention_A, [0, 2, 1])) - tf.eye(
-            self.max_sentence_len, self.max_sentence_len)
+            setting.r, setting.r)
         self.P_loss = tf.pow(tf.norm(self.P_matrix), 2)
 
         # model loss
@@ -656,7 +656,7 @@ class BiRnn_SelfAtt(object):
         # self.saver = tf.train.Saver(tf.global_variables())
 
     def fit(self, session, input_data, dropout_keep_rate):
-        feed_dict = {self.input_sen: input_data.word,
+        feed_dict = {self.input_sen: input_data.x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
@@ -667,7 +667,7 @@ class BiRnn_SelfAtt(object):
         return model_loss
 
     def evaluate(self, session, input_data):
-        feed_dict = {self.input_sen: input_data.word,
+        feed_dict = {self.input_sen: input_data.x,
                      self.input_pos1: input_data.pos1,
                      self.input_pos2: input_data.pos2,
                      self.input_labels: input_data.y,
