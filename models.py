@@ -619,9 +619,10 @@ class BiRnn_SelfAtt(object):
                 self.M = tf.matmul(self.attention_A, self.output_h)
 
             with tf.name_scope('full_connection'):
-                self.fc_w = tf.get_variable('fc_W', [self.hidden_size * 2, self.class_num])
+                self.vec_M = tf.reshape(self.M, [-1,  self.hidden_size * 2 * setting.r])
+                self.fc_w = tf.get_variable('fc_W', [self.hidden_size * 2 * setting.r, self.class_num])
                 self.fc_b = tf.get_variable('fc_b', [self.class_num])
-                self.sen_rep = tf.matmul(self.M, self.fc_w) + self.fc_b
+                self.sen_rep = tf.matmul(self.vec_M, self.fc_w) + self.fc_b
 
         # softmax
         with tf.name_scope('softmax'):
