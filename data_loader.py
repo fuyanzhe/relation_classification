@@ -144,8 +144,10 @@ class DataLoader(object):
         """
         if self.multi_ins:
             train_order = range(len(self.train_y_mi))
+            select_y = self.train_y_mi
         else:
             train_order = range(len(self.train_y))
+            select_y = self.train_y
 
         random.shuffle(train_order)
         batch_num = int(len(train_order) / batch_size)
@@ -156,14 +158,14 @@ class DataLoader(object):
                                   self.train_pos1[batch_order],
                                   self.train_pos2[batch_order],
                                   self.train_len[batch_order],
-                                  self.train_y[batch_order],
-                                  self.train_win[batch_order])
+                                  self.train_win[batch_order],
+                                  select_y[batch_order])
             else:
                 batch = InputData(self.train_x[batch_order],
                                   self.train_pos1[batch_order],
                                   self.train_pos2[batch_order],
                                   self.train_len[batch_order],
-                                  self.train_y[batch_order])
+                                  select_y[batch_order])
             yield batch
 
     def get_test_batches(self, batch_size):
@@ -172,8 +174,10 @@ class DataLoader(object):
         """
         if self.multi_ins:
             test_order = range(len(self.test_y_mi))
+            select_y = self.test_y_mi
         else:
             test_order = range(len(self.test_y))
+            select_y = self.test_y
 
         random.shuffle(test_order)
         batch_num = int(len(test_order) / batch_size)
@@ -184,14 +188,14 @@ class DataLoader(object):
                                   self.test_pos1[batch_order],
                                   self.test_pos2[batch_order],
                                   self.test_len[batch_order],
-                                  self.test_y[batch_order],
-                                  self.test_win[batch_order])
+                                  self.test_win[batch_order],
+                                  select_y[batch_order])
             else:
                 batch = InputData(self.test_x[batch_order],
                                   self.test_pos1[batch_order],
                                   self.test_pos2[batch_order],
                                   self.test_len[batch_order],
-                                  self.test_y[batch_order])
+                                  select_y[batch_order])
             yield batch
 
     def get_test_all(self):

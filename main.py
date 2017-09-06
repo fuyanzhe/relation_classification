@@ -159,8 +159,8 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
                 log_ana.write('-' * 80 + '\n')
 
                 # draw pr curve
-                prc_fn = os.path.join(res_path, 'prc_epoch{}.png'.format(epoch_num))
-                save_prcurve(test_prob, test_ans, model.model_name, prc_fn)
+                # prc_fn = os.path.join(res_path, 'prc_epoch{}.png'.format(epoch_num))
+                # save_prcurve(test_prob, test_ans, model_name, prc_fn)
 
                 # save model
                 saver.save(session, os.path.join(res_path, 'model_saved'), epoch_num)
@@ -177,11 +177,11 @@ def main():
     """
     # parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='birnn_selfatt',
+    parser.add_argument('--model_name', type=str, default='birnn',
                         help='one of cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_mi')
     parser.add_argument('--c_feature', type=bool, default=False,
                         help='True to use character level features, word level features otherwise')
-    parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
+    parser.add_argument('--epoch_num', type=int, default=10, help='epoch number')
     parser.add_argument('--batch_size', type=int, default=512, help='batch size')
     args = parser.parse_args()
 

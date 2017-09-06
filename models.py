@@ -346,7 +346,7 @@ class BiRnn(object):
                 self.output_final = self.outputs[-1]
             elif setting.hidden_select == 'avg':
                 self.output_final = tf.reduce_mean(
-                    tf.reshape(tf.concat(self.outputs, 1), [-1, self.max_sentence_len, self.hidden_size]), axis=1
+                    tf.reshape(tf.concat(self.outputs, 1), [-1, self.max_sentence_len, self.hidden_size * 2]), axis=1
                 )
 
         # softmax
