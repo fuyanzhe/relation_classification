@@ -2,9 +2,9 @@
 # Created by han on 17-7-8
 
 import os
-import cPickle
+import argparse
 import time
-from datetime import datetime
+import cPickle
 from data_loader import DataLoader
 from model_settings import *
 from models import *
@@ -51,7 +51,7 @@ def get_ids(c_feature):
     return x2id, id2x, id2rel
 
 
-def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_size):
+def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
     """
     train and evaluate model
     """
@@ -87,7 +87,7 @@ def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_si
         saver = tf.train.Saver(max_to_keep=None)
         # best evaluation f1
         best_test_f1 = 0
-        for epoch_num in range(train_epochs_num):
+        for epoch_num in range(epoch_num):
             # train
             iter_num = 0
             batches = data_loader.get_train_batches(batch_size=batch_size)
@@ -98,15 +98,13 @@ def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_si
                 if iter_num % 100 == 0:
                     _, prf_macro, _ = get_p_r_f1(c_label, batch.y)
                     p, r, f1 = prf_macro
-                    log_info = 'train: ' + str(datetime.now()) + ' epoch: {:>3}, batch: {:>4}, lost: {:.3f},' \
-                                                                 ' p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
-                        epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
-                    )
+                    log_info = 'train: ' + time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())) + \
+                               ' epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
+                                   epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100)
                     log_prf.write(log_info)
-                    print 'train: ', datetime.now(), ' epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%,' \
-                                                     ' r: {:.3f}%, f1:{:.3f}%'.format(
-                        epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100
-                    )
+                    print 'train: ', time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())), \
+                        ' epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
+                            epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100)
 
             # test
             use_neg = True
@@ -126,10 +124,9 @@ def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_si
             test_loss = np.mean(test_loss)
             prf_list, prf_macro, prf_micro = get_p_r_f1(test_pred, test_ans, use_neg)
             p, r, f1 = prf_macro
-            log_info = 'test : ' + str(datetime.now()) + ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%,' \
-                                                         ' f1:{:.3f}%\n'.format(
-                epoch_num, test_loss, p * 100, r * 100, f1 * 100
-            )
+            log_info = 'test : ' + time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())) + \
+                       ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%\n'.format(
+                           epoch_num, test_loss, p * 100, r * 100, f1 * 100)
 
             # best performance
             if f1 > best_test_f1:
@@ -162,57 +159,58 @@ def train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_si
                 log_ana.write('-' * 80 + '\n')
 
                 # draw pr curve
-                # prc_fn = os.path.join(res_path, 'prc_epoch{}.png'.format(epoch_num))
-                # save_prcurve(test_prob, test_ans, model_name, prc_fn)
+                prc_fn = os.path.join(res_path, 'prc_epoch{}.png'.format(epoch_num))
+                save_prcurve(test_prob, test_ans, model.model_name, prc_fn)
 
                 # save model
                 saver.save(session, os.path.join(res_path, 'model_saved'), epoch_num)
 
             log_prf.write(log_info)
-            print 'test : ', datetime.now(), ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
-                epoch_num, test_loss, p * 100, r * 100, f1 * 100
-            )
+            print 'test : ', time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())), \
+                ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
+                    epoch_num, test_loss, p * 100, r * 100, f1 * 100)
 
 
 def main():
     """
     initialize, train and evaluate models
     """
-    model_name = 'birnn_mi'
-
-    # feature select
-    c_feature = False
-
-    # train and test parameters
-    train_epochs_num = 200
-    batch_size = 1024
-
-    # model setting
-    model_setting = ms_dict[model_name]()
+    # parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model_name', type=str, default='birnn_selfatt',
+                        help='one of cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_mi')
+    parser.add_argument('--c_feature', type=bool, default=False,
+                        help='True to use character level features, word level features otherwise')
+    parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
+    parser.add_argument('--batch_size', type=int, default=512, help='batch size')
+    args = parser.parse_args()
 
     # initialize data loader
     print 'data loader initializing...'
-    mult_ins = True if '_mi' in model_name else False
+    mult_ins = True if '_mi' in args.model_name else False
 
-    if 'cnn' in model_name:
+    # model_setting
+    model_setting = ms_dict[args.model_name]()
+
+    if 'cnn' in args.model_name:
         data_loader = DataLoader(
-            './data', c_feature=c_feature, multi_ins=mult_ins, cnn_win_size=model_setting.win_size
+            './data', c_feature=args.c_feature, multi_ins=mult_ins, cnn_win_size=model_setting.win_size
         )
     else:
-        data_loader = DataLoader('./data', c_feature=c_feature, multi_ins=mult_ins)
+        data_loader = DataLoader('./data', c_feature=args.c_feature, multi_ins=mult_ins)
 
     # update model setting
     model_setting.sen_len = data_loader.max_sen_len
     if mult_ins:
-        model_setting.bag_num = batch_size
+        model_setting.bag_num = args.batch_size
 
     # initialize model
-    print 'initializing {} model...'.format(model_name)
-    model = m_dict[model_name](data_loader.embedding, model_setting)
+    print 'initializing {} model...'.format(args.model_name)
+    model = m_dict[args.model_name](data_loader.embedding, model_setting)
 
     # train and evaluate
     print 'training and evaluating model...'
-    train_evaluate(data_loader, model, model_setting, train_epochs_num, batch_size)
+    train_evaluate(data_loader, model, model_setting, args.epoch_num, args.batch_size)
 
 
 if __name__ == '__main__':

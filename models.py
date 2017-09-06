@@ -639,12 +639,12 @@ class BiRnn_SelfAtt(object):
         self.min_loss_idx = tf.argmin(self.instance_loss, 0)
 
         # Frobenius norm
-        self.P_matrix = tf.matmul(self.attention_A, tf.transpose(self.attention_A, [0, 2, 1])) - tf.eye(
+        self.P_att_matrix = tf.matmul(self.attention_A, tf.transpose(self.attention_A, [0, 2, 1])) - tf.eye(
             setting.r, setting.r)
-        self.P_loss = tf.pow(tf.norm(self.P_matrix), 2)
+        self.P_att = tf.pow(tf.norm(self.P_att_matrix), 2)
 
         # model loss
-        self.model_loss = tf.reduce_mean(self.instance_loss) + 0.0001 * self.P_loss
+        self.model_loss = tf.reduce_mean(self.instance_loss) + 0.0001 * self.P_att
 
         # optimizer
         if self.learning_rate:
