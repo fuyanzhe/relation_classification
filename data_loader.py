@@ -1,5 +1,6 @@
 # -*- encoding: utf-8 -*-
 # Created by han on 17-7-8
+
 import random
 import numpy as np
 import cPickle
@@ -138,6 +139,21 @@ class DataLoader(object):
                 self.train_win = np.asarray(train_x_win)
                 self.test_win = np.asarray(test_x_win)
 
+    def compute_pcnn_pool_mask(self, batch_size, L, length, pos):
+        mask = np.zeros((batch_size, 3, L), dtype=np.float32)
+        for i in range(batch_size):
+            a, b, c, d = pos[i]
+            if d <= a:
+                c, d, a, b = pos[i]  # ensure ~ a<b<=c<d
+            # piecewise cnn: 0...b-1; b ... d-1; d ... L
+            if b > 0:
+                mask[i, 0, :b] = 1
+            if b < d:
+                mask[i, 1, b:d] = 1
+            if d < length[i]:
+                mask[i, 2, d:length[i]] = 1
+        return mask
+
     def get_train_batches(self, batch_size):
         """
         get training data by batch
@@ -153,13 +169,13 @@ class DataLoader(object):
         batch_num = int(len(train_order) / batch_size)
         for i in range(batch_num):
             batch_order = train_order[i * batch_size: (i + 1) * batch_size]
-            if self.train_win:
+            if self.train_win is not None:
                 batch = InputData(self.train_x[batch_order],
                                   self.train_pos1[batch_order],
                                   self.train_pos2[batch_order],
                                   self.train_len[batch_order],
-                                  self.train_win[batch_order],
-                                  select_y[batch_order])
+                                  select_y[batch_order],
+                                  self.train_win[batch_order])
             else:
                 batch = InputData(self.train_x[batch_order],
                                   self.train_pos1[batch_order],
@@ -183,13 +199,13 @@ class DataLoader(object):
         batch_num = int(len(test_order) / batch_size)
         for i in range(batch_num):
             batch_order = test_order[i * batch_size: (i + 1) * batch_size]
-            if self.test_win:
+            if self.test_win is not None:
                 batch = InputData(self.test_x[batch_order],
                                   self.test_pos1[batch_order],
                                   self.test_pos2[batch_order],
                                   self.test_len[batch_order],
-                                  self.test_win[batch_order],
-                                  select_y[batch_order])
+                                  select_y[batch_order],
+                                  self.test_win[batch_order])
             else:
                 batch = InputData(self.test_x[batch_order],
                                   self.test_pos1[batch_order],
@@ -202,7 +218,8 @@ class DataLoader(object):
         """
         get all testing data
         """
+        select_y = self.test_y_mi if self.multi_ins else self.test_y
         test_data = InputData(
-            self.test_x, self.test_pos1, self.test_pos2, self.test_len, self.test_y, self.test_win
+            self.test_x, self.test_pos1, self.test_pos2, self.test_len, select_y, self.test_win
         )
         return test_data

@@ -75,7 +75,7 @@ class Cnn(object):
             self.softmax_w = tf.get_variable('softmax_W', [self.filter_num * len(self.filter_sizes), self.class_num])
             self.softmax_b = tf.get_variable('softmax_b', [self.class_num])
             self.softmax_pred = tf.matmul(self.outputs, self.softmax_w) + self.softmax_b
-            # self.softmax_pred = self.outputs
+                # self.softmax_pred = self.outputs
             self.softmax_res = tf.nn.softmax(self.softmax_pred)
 
         # get max softmax predict result of each relation
@@ -96,9 +96,6 @@ class Cnn(object):
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
         else:
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
-
-        # saver
-        self.saver = tf.train.Saver(tf.global_variables())
 
     def sentence_encoder(self):
         # convolution and max pooling
@@ -257,8 +254,7 @@ class Rnn(object):
         else:
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
 
-        # # saver
-        # self.saver = tf.train.Saver(tf.global_variables())
+        tf.squeeze()
 
     def fit(self, session, input_data, dropout_keep_rate):
         feed_dict = {self.input_sen: input_data.x,
@@ -374,9 +370,6 @@ class BiRnn(object):
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
         else:
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
-
-        # # saver
-        # self.saver = tf.train.Saver(tf.global_variables())
 
     def fit(self, session, input_data, dropout_keep_rate):
         feed_dict = {self.input_sen: input_data.x,
@@ -509,9 +502,6 @@ class BiRnn_Att(object):
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
         else:
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
-
-        # # saver
-        # self.saver = tf.train.Saver(tf.global_variables())
 
     def fit(self, session, input_data, dropout_keep_rate):
         feed_dict = {self.input_sen: input_data.x,
@@ -652,9 +642,6 @@ class BiRnn_SelfAtt(object):
         else:
             self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
 
-        # # saver
-        # self.saver = tf.train.Saver(tf.global_variables())
-
     def fit(self, session, input_data, dropout_keep_rate):
         feed_dict = {self.input_sen: input_data.x,
                      self.input_pos1: input_data.pos1,
@@ -742,7 +729,12 @@ class BiRnn_Mi(object):
             self.outputs, _, _ = tf.contrib.rnn.static_bidirectional_rnn(
                 self.foward_cell, self.backward_cell, self.emb_all_us, dtype=tf.float32
             )
-            self.sen_emb = self.outputs[-1]
+            if setting.hidden_select == 'last':
+                self.sen_emb = self.outputs[-1]
+            elif setting.hidden_select == 'avg':
+                self.sen_emb = tf.reduce_mean(
+                    tf.reshape(tf.concat(self.outputs, 1), [-1, self.max_sentence_len, self.hidden_size * 2]), axis=1
+                )
 
         with tf.name_scope('sentence_attention'):
             # sentence-level attention layer

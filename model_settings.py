@@ -57,4 +57,4 @@ class RnnMiSetting(object):
         self.learning_rate = None
         self.dropout_rate = 0.5
         self.bag_num = None
-        self.hidden_select = 'last'
+        self.hidden_select = 'avg'

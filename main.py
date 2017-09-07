@@ -59,32 +59,40 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
     x2id, id2x, id2rel = get_ids(data_loader.c_feature)
 
     # result saving path
-    res_path = os.path.join(
-        './result', model.model_name, '{}_{}_{}'.format(
-            model.model_name,
-            'c' if data_loader.c_feature else 'w',
-            time.strftime('%y%m%d_%H%M', time.localtime(time.time()))
-        )
-    )
+    model_path = os.path.join('./result', model.model_name, 'c_level' if data_loader.c_feature else 'w_level')
+    res_path = os.path.join(model_path, time.strftime('%y%m%d_%H%M', time.localtime(time.time())))
     if not os.path.exists(res_path):
         os.makedirs(res_path)
 
     # log files
+    log_setting = tf.gfile.GFile(os.path.join(res_path, 'setting.txt'), mode='a')
     log_prf = tf.gfile.GFile(os.path.join(res_path, 'prf.txt'), mode='a')
     log_ana = tf.gfile.GFile(os.path.join(res_path, 'analysis.txt'), mode='a')
-    log_prf.write('=' * 80 + '\n' + model.model_name + '\n')
-    log_ana.write('=' * 80 + '\n' + model.model_name + '\n')
+
+    log_setting.write(model.model_name + '\n')
+    log_setting.write('=' * 80 + '\n')
     for para in sorted(model_setting.__dict__.keys()):
         pv_str = '{}: {}'.format(para, getattr(model_setting, para))
         print pv_str
-        log_prf.write(pv_str + '\n')
-        log_ana.write(pv_str + '\n')
-    log_prf.write('=' * 80 + '\n')
-    log_ana.write('=' * 80 + '\n')
+        log_setting.write(pv_str + '\n')
+    log_setting.write('=' * 80 + '\n')
+    log_setting.write('batch_size: {}\n'.format(batch_size))
+    log_setting.write('epoch num: {}\n'.format(epoch_num))
+
+    # tensor board
+    tb_path = os.path.join(model_path, 'TensorBoard')
+    if not os.path.exists(tb_path):
+        os.makedirs(tb_path)
+    tb_writer = tf.summary.FileWriter(tb_path)
 
     with tf.Session() as session:
+        # initialize variables
         tf.global_variables_initializer().run()
+        # model saver
         saver = tf.train.Saver(max_to_keep=None)
+        # tensor board
+        tf.summary.merge_all()
+        tb_writer.add_graph(session.graph)
         # best evaluation f1
         best_test_f1 = 0
         for epoch_num in range(epoch_num):
@@ -158,14 +166,21 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
                         log_ana.write(ins)
                 log_ana.write('-' * 80 + '\n')
 
+                # save pr data
+                test_prob = np.asarray(test_prob)
+                test_ans = np.asarray(test_ans)
+                np.save(os.path.join(res_path, 'test_prob_{}.npy'.format(epoch_num)), test_prob)
+                np.save(os.path.join(res_path, 'test_ans_{}.npy'.format(epoch_num)), test_ans)
+
                 # draw pr curve
                 # prc_fn = os.path.join(res_path, 'prc_epoch{}.png'.format(epoch_num))
-                # save_prcurve(test_prob, test_ans, model_name, prc_fn)
+                # save_prcurve(test_prob, test_ans, model.model_name, prc_fn)
 
                 # save model
-                saver.save(session, os.path.join(res_path, 'model_saved'), epoch_num)
+                saver.save(session, os.path.join(res_path, 'model_saved'))
 
             log_prf.write(log_info)
+            log_prf.write('-' * 80 + '\n')
             print 'test : ', time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())), \
                 ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100)
@@ -177,11 +192,12 @@ def main():
     """
     # parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='birnn',
+    parser.add_argument('--model_name', type=str, default='rnn',
                         help='one of cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_mi')
-    parser.add_argument('--c_feature', type=bool, default=False,
-                        help='True to use character level features, word level features otherwise')
-    parser.add_argument('--epoch_num', type=int, default=10, help='epoch number')
+    parser.add_argument('--c_feature', dest='c_feature', action='store_true', help='use character level features')
+    parser.add_argument('--w_feature', dest='c_feature', action='store_false', help='use word level features')
+    parser.set_defaults(c_feature=False, help='use word feature as default')
+    parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
     parser.add_argument('--batch_size', type=int, default=512, help='batch size')
     args = parser.parse_args()
 
@@ -204,13 +220,17 @@ def main():
     if mult_ins:
         model_setting.bag_num = args.batch_size
 
-    # initialize model
-    print 'initializing {} model...'.format(args.model_name)
-    model = m_dict[args.model_name](data_loader.embedding, model_setting)
+    # each graph contains a model and the model's training and testing process
+    # tf.Graph().as_default() is unnecessary if only train one model in one time, but is needed if you want
+    #  to train more than one models one time
+    with tf.Graph().as_default():
+        # initialize model
+        print 'initializing {} model...'.format(args.model_name)
+        model = m_dict[args.model_name](data_loader.embedding, model_setting)
 
-    # train and evaluate
-    print 'training and evaluating model...'
-    train_evaluate(data_loader, model, model_setting, args.epoch_num, args.batch_size)
+        # train and evaluate
+        print 'training and evaluating model...'
+        train_evaluate(data_loader, model, model_setting, args.epoch_num, args.batch_size)
 
 
 if __name__ == '__main__':
