@@ -60,7 +60,8 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
 
     # result saving path
     model_path = os.path.join('./result', model.model_name, 'c_level' if data_loader.c_feature else 'w_level')
-    res_path = os.path.join(model_path, time.strftime('%y%m%d_%H%M', time.localtime(time.time())))
+    time_id = time.strftime('%y%m%d_%H%M', time.localtime(time.time()))
+    res_path = os.path.join(model_path, time_id)
     if not os.path.exists(res_path):
         os.makedirs(res_path)
 
@@ -80,7 +81,7 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
     log_setting.write('epoch num: {}\n'.format(epoch_num))
 
     # tensor board
-    tb_path = os.path.join(model_path, 'TensorBoard')
+    tb_path = os.path.join(model_path, 'TensorBoard', time_id)
     if not os.path.exists(tb_path):
         os.makedirs(tb_path)
     tb_writer = tf.summary.FileWriter(tb_path)
@@ -91,7 +92,6 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
         # model saver
         saver = tf.train.Saver(max_to_keep=None)
         # tensor board
-        tf.summary.merge_all()
         tb_writer.add_graph(session.graph)
         # best evaluation f1
         best_test_f1 = 0
@@ -101,9 +101,10 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
             batches = data_loader.get_train_batches(batch_size=batch_size)
             for batch in batches:
                 iter_num += 1
-                loss = model.fit(session, batch, dropout_keep_rate=model_setting.dropout_rate)
+                model_summary, loss = model.fit(session, batch, dropout_keep_rate=model_setting.dropout_rate)
                 _, c_label, _ = model.evaluate(session, batch)
-                if iter_num % 100 == 0:
+                if iter_num % 50 == 0:
+                    tb_writer.add_summary(model_summary, iter_num)
                     _, prf_macro, _ = get_p_r_f1(c_label, batch.y)
                     p, r, f1 = prf_macro
                     log_info = 'train: ' + time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())) + \
@@ -192,7 +193,7 @@ def main():
     """
     # parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='rnn',
+    parser.add_argument('--model_name', type=str, default='cnn',
                         help='one of cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_mi')
     parser.add_argument('--c_feature', dest='c_feature', action='store_true', help='use character level features')
     parser.add_argument('--w_feature', dest='c_feature', action='store_false', help='use word level features')

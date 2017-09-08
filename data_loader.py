@@ -139,19 +139,27 @@ class DataLoader(object):
                 self.train_win = np.asarray(train_x_win)
                 self.test_win = np.asarray(test_x_win)
 
-    def compute_pcnn_pool_mask(self, batch_size, L, length, pos):
-        mask = np.zeros((batch_size, 3, L), dtype=np.float32)
-        for i in range(batch_size):
-            a, b, c, d = pos[i]
-            if d <= a:
-                c, d, a, b = pos[i]  # ensure ~ a<b<=c<d
-            # piecewise cnn: 0...b-1; b ... d-1; d ... L
-            if b > 0:
-                mask[i, 0, :b] = 1
-            if b < d:
-                mask[i, 1, b:d] = 1
-            if d < length[i]:
-                mask[i, 2, d:length[i]] = 1
+    def compute_pcnn_pool_mask(self, x, s_len, pos1,  pos2):
+        """
+        used in pcnn, get piece wise max pooling mask
+        """
+        s_num, s_max_l = x.shape
+        pos1_0 = pos1[:0]
+        pos2_0 = pos1[:0]
+        p_e1 = s_max_l - pos1_0 + 1
+        p_e2 = s_max_l - pos2_0 + 1
+        mask = np.zeros((s_num, 3, s_max_l), dtype=np.float32)
+        for i in range(s_num):
+            p1 = p_e1[i]
+            p2 = p_e2[i]
+            if p1 <= p2:
+                mask[i, 0, :p1] = 1
+                mask[i, 1, p1:p2] = 1
+                mask[i, 2, p2:s_max_l] = 1
+            else:
+                mask[i, 0, :p2] = 1
+                mask[i, 1, p2:p1] = 1
+                mask[i, 2, p1:s_max_l] = 1
         return mask
 
     def get_train_batches(self, batch_size):

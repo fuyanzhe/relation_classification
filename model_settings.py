@@ -9,7 +9,7 @@ class CnnSetting(object):
         self.pos_size = 5
         self.class_num = 31
         self.sen_len = 100
-        self.filter_sizes = [3]
+        self.filter_sizes = [2, 4, 6, 10, 20]
         self.filter_num = 200
         self.learning_rate = None
         self.dropout_rate = 0.5
