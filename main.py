@@ -12,6 +12,7 @@ from evaluate import *
 
 ms_dict = {
     'cnn': CnnSetting,
+    'deepcnn': DeepCnnSetting,
     'rnn': RnnSetting,
     'birnn': RnnSetting,
     'birnn_att': RnnSetting,
@@ -21,6 +22,7 @@ ms_dict = {
 
 m_dict = {
     'cnn': Cnn,
+    'deepcnn': DeepCnn,
     'rnn': Rnn,
     'birnn': BiRnn,
     'birnn_att': BiRnn_Att,
@@ -193,13 +195,13 @@ def main():
     """
     # parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='cnn',
+    parser.add_argument('--model_name', type=str, default='deepcnn',
                         help='one of cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_mi')
     parser.add_argument('--c_feature', dest='c_feature', action='store_true', help='use character level features')
     parser.add_argument('--w_feature', dest='c_feature', action='store_false', help='use word level features')
     parser.set_defaults(c_feature=False, help='use word feature as default')
     parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
-    parser.add_argument('--batch_size', type=int, default=512, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
     args = parser.parse_args()
 
     # initialize data loader
@@ -209,7 +211,7 @@ def main():
     # model_setting
     model_setting = ms_dict[args.model_name]()
 
-    if 'cnn' in args.model_name:
+    if hasattr(model_setting, 'win_size'):
         data_loader = DataLoader(
             './data', c_feature=args.c_feature, multi_ins=mult_ins, cnn_win_size=model_setting.win_size
         )
@@ -223,7 +225,7 @@ def main():
 
     # each graph contains a model and the model's training and testing process
     # tf.Graph().as_default() is unnecessary if only train one model in one time, but is needed if you want
-    #  to train more than one models one time
+    # to train more than one models one time
     with tf.Graph().as_default():
         # initialize model
         print 'initializing {} model...'.format(args.model_name)

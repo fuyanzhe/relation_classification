@@ -192,6 +192,372 @@ class Cnn(object):
         return model_loss, label_pred, label_prob
 
 
+class DeepCnn(object):
+    """
+    Multi-layer CNN model.
+    """
+    def __init__(self, x_embedding, setting):
+        # model name
+        self.model_name = 'DeepCnn'
+
+        with tf.name_scope('model_input'):
+            # max sentence length
+            self.max_sentence_len = setting.sen_len
+
+            # filter number
+            self.filter_sizes = setting.filter_sizes
+            self.filter_num = setting.filter_num
+
+            # max pooling settings
+            self.max_pool_sizes = setting.max_pool_sizes
+
+            # full connecting settings
+            self.fc_sizes = setting.fc_sizes
+
+            # number of classes
+            self.class_num = setting.class_num
+
+            # inputs
+            self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
+            self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
+
+            # position feature
+            self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
+            self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
+
+            # dropout keep probability
+            self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
+
+            # learning rate
+            self.learning_rate = setting.learning_rate
+
+            # embedding matrix
+            self.embed_matrix_x = tf.get_variable(
+                'embed_matrix_x', x_embedding.shape,
+                initializer=tf.constant_initializer(x_embedding)
+            )
+            self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
+            self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [setting.pos_num, setting.pos_size])
+            self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [setting.pos_num, setting.pos_size])
+            self.embed_size_pos = setting.pos_size
+
+        with tf.name_scope('embedding_layer'):
+            # embedded
+            self.emb_sen = tf.reshape(
+                tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen),
+                [-1, self.max_sentence_len, self.embed_size_x]
+            )
+            self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
+            self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
+
+            # concat embeddings
+            self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
+            self.emb_all_expanded = tf.expand_dims(self.emb_all, -1)
+
+        with tf.name_scope('conv_maxpooling'):
+            # input shape of next conv layer
+            nl_input = self.emb_all_expanded
+
+            # conv and max pool
+            for i in range(len(self.filter_sizes)):
+                filter_size = self.filter_sizes[i]
+                filter_num = self.filter_num[i]
+                # convolution and max pooling
+                with tf.name_scope('conv_{}'.format(i)):
+                    # convolution layer
+                    filter_shape = [filter_size, nl_input.shape[2], 1, filter_num]
+
+                    w = tf.get_variable('W_conv_{}'.format(i),
+                                        filter_shape, initializer=tf.truncated_normal_initializer(stddev=0.05))
+                    b = tf.get_variable('b_conv_{}'.format(i),
+                                        [filter_num], initializer=tf.truncated_normal_initializer(stddev=0.05))
+
+                    tf.summary.histogram('W_conv_{}'.format(i), w)
+                    tf.summary.histogram('b_conv_{}'.format(i), b)
+
+                    conv = tf.nn.conv2d(nl_input, w, strides=[1, 1, 1, 1], padding='VALID', name='conv')
+
+                    # Apply none linearity
+                    nl_input = tf.transpose(tf.nn.relu(tf.nn.bias_add(conv, b), name='relu'), [0, 1, 3, 2])
+
+                if self.max_pool_sizes[i] != 0:
+                    with tf.name_scope('max_pool_{}'.format(i)):
+                        max_pool_size = self.max_pool_sizes[i]
+                        # Max pooling over the outputs
+                        nl_input = tf.nn.max_pool(
+                            nl_input,
+                            ksize=[1, max_pool_size, 1, 1],
+                            strides=[1, 1, 1, 1],
+                            padding='VALID', name='max_pool_{}'.format(i)
+                        )
+
+        # full connection layer
+        with tf.name_scope('fc_layers'):
+            nl_input = tf.reshape(nl_input, [-1, int(nl_input.shape[1]) * int(nl_input.shape[2])])
+            for i in range(len(self.fc_sizes)):
+                with tf.name_scope('fc_layer_{}'.format(i)):
+                    # full connection layer before softmax
+                    fc_w = tf.get_variable('fc_W_{}'.format(i), [nl_input.shape[-1], self.fc_sizes[i]],
+                                           initializer=tf.truncated_normal_initializer(stddev=0.05))
+                    fc_b = tf.get_variable('fc_b_{}'.format(i), [self.fc_sizes[i]],
+                                           initializer=tf.truncated_normal_initializer(stddev=0.05))
+
+                    tf.summary.histogram('fc_W_{}'.format(i), fc_w)
+                    tf.summary.histogram('fc_b_{}'.format(i), fc_b)
+
+                    nl_input = tf.matmul(nl_input, fc_w) + fc_b
+
+            self.fc_out = nl_input
+
+        # softmax
+        with tf.name_scope('softmax'):
+            self.softmax_res = tf.nn.softmax(self.fc_out)
+
+        with tf.name_scope("accuracy"):
+            # get max softmax predict result of each relation
+            self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
+
+            # class label
+            self.class_label = tf.argmax(self.softmax_res, 1)
+
+            # accuracy
+            self.accuracy = tf.reduce_mean(
+                tf.cast(tf.equal(self.class_label, tf.argmax(self.input_labels, 1)), "float"), name="accuracy"
+            )
+            tf.summary.scalar('accuracy', self.accuracy)
+
+        with tf.name_scope('model_predict'):
+            # get max softmax predict result of each relation
+            self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
+
+            # class label
+            self.class_label = tf.argmax(self.softmax_res, 1)
+
+        with tf.name_scope('model_loss'):
+            # choose the min loss instance index
+            self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.fc_out, labels=self.input_labels)
+
+            # model loss
+            self.model_loss = tf.reduce_mean(self.instance_loss)
+            tf.summary.scalar('model_loss', self.model_loss)
+
+        with tf.name_scope('optimizer'):
+            # optimizer
+            if self.learning_rate:
+                self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
+            else:
+                self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
+
+        # tensor board summary
+        self.merge_summary = tf.summary.merge_all()
+
+    def fit(self, session, input_data, dropout_keep_rate):
+        input_x = input_data.x
+        feed_dict = {self.input_sen: input_x,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: dropout_keep_rate
+                     }
+        session.run(self.optimizer, feed_dict=feed_dict)
+        summary, model_loss = session.run([self.merge_summary, self.model_loss], feed_dict=feed_dict)
+        return summary, model_loss
+
+    def evaluate(self, session, input_data):
+        input_x = input_data.x
+        feed_dict = {self.input_sen: input_x,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: 1}
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
+
+
+class ResNet(object):
+    """
+    ResNet.
+    """
+    def __init__(self, x_embedding, setting):
+        # model name
+        self.model_name = 'DeepCnn'
+
+        with tf.name_scope('model_input'):
+            # max sentence length
+            self.max_sentence_len = setting.sen_len
+
+            # filter number
+            self.filter_sizes = setting.filter_sizes
+            self.filter_num = setting.filter_num
+
+            # max pooling settings
+            self.max_pool_sizes = setting.max_pool_sizes
+
+            # full connecting settings
+            self.fc_sizes = setting.fc_sizes
+
+            # number of classes
+            self.class_num = setting.class_num
+
+            # inputs
+            self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
+            self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
+
+            # position feature
+            self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
+            self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
+
+            # dropout keep probability
+            self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
+
+            # learning rate
+            self.learning_rate = setting.learning_rate
+
+            # embedding matrix
+            self.embed_matrix_x = tf.get_variable(
+                'embed_matrix_x', x_embedding.shape,
+                initializer=tf.constant_initializer(x_embedding)
+            )
+            self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
+            self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [setting.pos_num, setting.pos_size])
+            self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [setting.pos_num, setting.pos_size])
+            self.embed_size_pos = setting.pos_size
+
+        with tf.name_scope('embedding_layer'):
+            # embedded
+            self.emb_sen = tf.reshape(
+                tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen),
+                [-1, self.max_sentence_len, self.embed_size_x]
+            )
+            self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
+            self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
+
+            # concat embeddings
+            self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
+            self.emb_all_expanded = tf.expand_dims(self.emb_all, -1)
+
+        with tf.name_scope('conv_maxpooling'):
+            # input shape of next conv layer
+            nl_input = self.emb_all_expanded
+
+            # conv and max pool
+            for i in range(len(self.filter_sizes)):
+                filter_size = self.filter_sizes[i]
+                filter_num = self.filter_num[i]
+                # convolution and max pooling
+                with tf.name_scope('conv_{}'.format(i)):
+                    # convolution layer
+                    filter_shape = [filter_size, nl_input.shape[2], 1, filter_num]
+
+                    w = tf.get_variable('W_conv_{}'.format(i),
+                                        filter_shape, initializer=tf.truncated_normal_initializer(stddev=0.05))
+                    b = tf.get_variable('b_conv_{}'.format(i),
+                                        [filter_num], initializer=tf.truncated_normal_initializer(stddev=0.05))
+
+                    tf.summary.histogram('W_conv_{}'.format(i), w)
+                    tf.summary.histogram('b_conv_{}'.format(i), b)
+
+                    conv = tf.nn.conv2d(nl_input, w, strides=[1, 1, 1, 1], padding='VALID', name='conv')
+
+                    # Apply none linearity
+                    nl_input = tf.transpose(tf.nn.relu(tf.nn.bias_add(conv, b), name='relu'), [0, 1, 3, 2])
+
+                if self.max_pool_sizes[i] != 0:
+                    with tf.name_scope('max_pool_{}'.format(i)):
+                        max_pool_size = self.max_pool_sizes[i]
+                        # Max pooling over the outputs
+                        nl_input = tf.nn.max_pool(
+                            nl_input,
+                            ksize=[1, max_pool_size, 1, 1],
+                            strides=[1, 1, 1, 1],
+                            padding='VALID', name='max_pool_{}'.format(i)
+                        )
+
+        # full connection layer
+        with tf.name_scope('fc_layers'):
+            nl_input = tf.reshape(nl_input, [-1, int(nl_input.shape[1]) * int(nl_input.shape[2])])
+            for i in range(len(self.fc_sizes)):
+                with tf.name_scope('fc_layer_{}'.format(i)):
+                    # full connection layer before softmax
+                    fc_w = tf.get_variable('fc_W_{}'.format(i), [nl_input.shape[-1], self.fc_sizes[i]])
+                    fc_b = tf.get_variable('fc_b_{}'.format(i), [self.fc_sizes[i]])
+
+                    tf.summary.histogram('fc_W_{}'.format(i), fc_w)
+                    tf.summary.histogram('fc_b_{}'.format(i), fc_b)
+
+                    nl_input = tf.matmul(nl_input, fc_w) + fc_b
+
+            self.fc_out = nl_input
+
+        # softmax
+        with tf.name_scope('softmax'):
+            self.softmax_res = tf.nn.softmax(self.fc_out)
+
+        with tf.name_scope("accuracy"):
+            # get max softmax predict result of each relation
+            self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
+
+            # class label
+            self.class_label = tf.argmax(self.softmax_res, 1)
+
+            # accuracy
+            self.accuracy = tf.reduce_mean(
+                tf.cast(tf.equal(self.class_label, tf.argmax(self.input_labels, 1)), "float"), name="accuracy"
+            )
+            tf.summary.scalar('accuracy', self.accuracy)
+
+        with tf.name_scope('model_predict'):
+            # get max softmax predict result of each relation
+            self.maxres_by_rel = tf.reduce_max(self.softmax_res, 0)
+
+            # class label
+            self.class_label = tf.argmax(self.softmax_res, 1)
+
+        with tf.name_scope('model_loss'):
+            # choose the min loss instance index
+            self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.fc_out, labels=self.input_labels)
+
+            # model loss
+            self.model_loss = tf.reduce_mean(self.instance_loss)
+            tf.summary.scalar('model_loss', self.model_loss)
+
+        with tf.name_scope('optimizer'):
+            # optimizer
+            if self.learning_rate:
+                self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
+            else:
+                self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
+
+        # tensor board summary
+        self.merge_summary = tf.summary.merge_all()
+
+    def fit(self, session, input_data, dropout_keep_rate):
+        input_x = input_data.x
+        feed_dict = {self.input_sen: input_x,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: dropout_keep_rate
+                     }
+        session.run(self.optimizer, feed_dict=feed_dict)
+        summary, model_loss = session.run([self.merge_summary, self.model_loss], feed_dict=feed_dict)
+        return summary, model_loss
+
+    def evaluate(self, session, input_data):
+        input_x = input_data.x
+        feed_dict = {self.input_sen: input_x,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: 1}
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
+
+
 class Rnn(object):
     """
     Basic Rnn model.
