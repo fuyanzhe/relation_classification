@@ -97,16 +97,19 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
         tb_writer.add_graph(session.graph)
         # best evaluation f1
         best_test_f1 = 0
+        # total iter number
+        iter_num_tot = 0
         for epoch_num in range(epoch_num):
             # train
             iter_num = 0
             batches = data_loader.get_train_batches(batch_size=batch_size)
             for batch in batches:
+                iter_num_tot += 1
                 iter_num += 1
                 model_summary, loss = model.fit(session, batch, dropout_keep_rate=model_setting.dropout_rate)
                 _, c_label, _ = model.evaluate(session, batch)
                 if iter_num % 50 == 0:
-                    tb_writer.add_summary(model_summary, iter_num)
+                    tb_writer.add_summary(model_summary, iter_num_tot)
                     _, prf_macro, _ = get_p_r_f1(c_label, batch.y)
                     p, r, f1 = prf_macro
                     log_info = 'train: ' + time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())) + \
