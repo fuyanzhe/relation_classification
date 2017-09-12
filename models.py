@@ -8,6 +8,13 @@ rnn_cell = {
     'gru': tf.nn.rnn_cell.GRUCell
 }
 
+opt_method = {
+    'sgd': tf.train.GradientDescentOptimizer,
+    'adam': tf.train.AdamOptimizer,
+    'adadelta': tf.train.AdadeltaOptimizer,
+    'adagrad': tf.train.AdagradOptimizer
+}
+
 
 class Cnn(object):
     """
@@ -225,11 +232,9 @@ class DeepCnn(object):
             self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
             self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
 
-            # dropout keep probability
+            # dropout
+            self.dropout_mask = setting.dropout_mask
             self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
-
-            # learning rate
-            self.learning_rate = setting.learning_rate
 
             # embedding matrix
             self.embed_matrix_x = tf.get_variable(
@@ -286,10 +291,13 @@ class DeepCnn(object):
                         # Max pooling over the outputs
                         nl_input = tf.nn.max_pool(
                             nl_input,
-                            ksize=[1, max_pool_size, 1, 1],
+                            ksize=[1, max_pool_size[0], max_pool_size[1], 1],
                             strides=[1, 1, 1, 1],
                             padding='VALID', name='max_pool_{}'.format(i)
                         )
+
+                if self.dropout_mask[i] != 0:
+                    self.nl_input = tf.nn.dropout(nl_input, self.dropout_keep_rate)
 
         # full connection layer
         with tf.name_scope('fc_layers'):
@@ -306,6 +314,9 @@ class DeepCnn(object):
                     tf.summary.histogram('fc_b_{}'.format(i), fc_b)
 
                     nl_input = tf.matmul(nl_input, fc_w) + fc_b
+
+                    if self.dropout_mask[i - len(self.filter_sizes)] != 0:
+                        self.nl_input = tf.nn.dropout(nl_input, self.dropout_keep_rate)
 
             self.fc_out = nl_input
 
@@ -343,10 +354,8 @@ class DeepCnn(object):
 
         with tf.name_scope('optimizer'):
             # optimizer
-            if self.learning_rate:
-                self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
-            else:
-                self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
+            self.optimizer = opt_method[setting.optimizer](learning_rate=setting.learning_rate).minimize(
+                self.model_loss)
 
         # tensor board summary
         self.merge_summary = tf.summary.merge_all()
@@ -525,10 +534,12 @@ class ResNet(object):
 
         with tf.name_scope('optimizer'):
             # optimizer
-            if self.learning_rate:
-                self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
-            else:
-                self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
+            # if self.learning_rate:
+            #     self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.model_loss)
+            # else:
+            #     self.optimizer = tf.train.AdamOptimizer().minimize(self.model_loss)
+            self.optimizer = tf.train.GradientDescentOptimizer(
+                learning_rate=self.learning_rate).minimize(self.model_loss)
 
         # tensor board summary
         self.merge_summary = tf.summary.merge_all()

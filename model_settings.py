@@ -23,14 +23,45 @@ class DeepCnnSetting(object):
         self.class_num = 31
         self.sen_len = 100
         # conv layers
-        self.filter_sizes = [7, 7, 3, 3, 3, 3]
+        self.filter_sizes = [3, 3]
         self.filter_num = [256] * len(self.filter_sizes)
         # max pool layers, 0 when max pool is not used
-        self.max_pool_sizes = [3, 3, 0, 0, 0, 3]
+        self.max_pool_sizes = [(3, 1), (3, 1)]
+        assert len(self.filter_sizes) == len(self.max_pool_sizes)
         # full connection layers
-        self.fc_sizes = [1024, 1024, self.class_num]
+        self.fc_sizes = [self.class_num]
+        # drop out
+        self.dropout_mask = [1, 1, 0]
+        assert len(self.dropout_mask) == len(self.filter_sizes) + len(self.fc_sizes)
+        # optimizer
+        self.optimizer = 'adam'
         # learning settings
-        self.learning_rate = 0.03
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+
+
+class ResNetSetting(object):
+    def __init__(self):
+        # data settings
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        # conv layers
+        self.filter_sizes = [5]
+        self.filter_num = [256] * len(self.filter_sizes)
+        # max pool layers, 0 when max pool is not used
+        self.max_pool_sizes = [(3, 1)]
+        assert len(self.filter_sizes) == len(self.max_pool_sizes)
+        # full connection layers
+        self.fc_sizes = [self.class_num]
+        # drop out
+        self.dropout_mask = [1, 0]
+        assert len(self.dropout_mask) == len(self.filter_sizes) + len(self.fc_sizes)
+        # optimizer
+        self.optimizer = 'adam'
+        # learning settings
+        self.learning_rate = 0.001
         self.dropout_rate = 0.5
 
 

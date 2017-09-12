@@ -104,12 +104,11 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
             iter_num = 0
             batches = data_loader.get_train_batches(batch_size=batch_size)
             for batch in batches:
-                iter_num_tot += 1
-                iter_num += 1
                 model_summary, loss = model.fit(session, batch, dropout_keep_rate=model_setting.dropout_rate)
                 _, c_label, _ = model.evaluate(session, batch)
-                if iter_num % 50 == 0:
+                if iter_num_tot % 50 == 0:
                     tb_writer.add_summary(model_summary, iter_num_tot)
+                if iter_num % 50 == 0:
                     _, prf_macro, _ = get_p_r_f1(c_label, batch.y)
                     p, r, f1 = prf_macro
                     log_info = 'train: ' + time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())) + \
@@ -119,6 +118,8 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
                     print 'train: ', time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())), \
                         ' epoch: {:>3}, batch: {:>4}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                             epoch_num, iter_num, loss, p * 100, r * 100, f1 * 100)
+                iter_num_tot += 1
+                iter_num += 1
 
             # test
             use_neg = True

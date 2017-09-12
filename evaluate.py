@@ -122,6 +122,9 @@ def get_wrong_ins(pred, ans, sen, p1, p2, x2id, id2x, id2rel, use_neg=True):
 
 
 def save_prcurve(prob, answer, model_name, save_fn, use_neg=True):
+    """
+    save prc curve
+    """
     if not use_neg:
         prob_dn = []
         ans_dn = []
