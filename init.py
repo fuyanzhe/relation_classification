@@ -130,9 +130,11 @@ def feature_word2char(sentence, en1pos, en2pos):
     :param en1pos: entity 1 position
     :param en2pos: entity 2 position
     :return: sentence by character, (entity 1 position, entity 2 position), sentence length in character level
+              entity 1 by character, entity 2 by character
     """
     sentence_c = []
     en1pos_c, en2pos_c = 0, 0
+    e1_c, e2_c = [], []
     sen_len_c = 0
     for i in range(len(sentence)):
         if i == en1pos:
@@ -142,6 +144,7 @@ def feature_word2char(sentence, en1pos, en2pos):
                 word_c = sentence[i].decode('utf8')
             sentence_c.append(word_c)
             en1pos_c = sen_len_c
+            e1_c = [i for i in word_c]
             sen_len_c += 1
 
         elif i == en2pos:
@@ -151,6 +154,7 @@ def feature_word2char(sentence, en1pos, en2pos):
                 word_c = sentence[i].decode('utf8')
             sentence_c.append(word_c)
             en2pos_c = sen_len_c
+            e2_c = [i for i in word_c]
             sen_len_c += 1
         else:
             if '_con_' in sentence[i]:
@@ -164,7 +168,7 @@ def feature_word2char(sentence, en1pos, en2pos):
                 for c in sentence[i].decode('utf8'):
                     sentence_c.append(c)
 
-    return sentence_c, (en1pos_c, en2pos_c), sen_len_c
+    return sentence_c, (en1pos_c, en2pos_c), sen_len_c, e1_c, e2_c
 
 
 def sentence2idx(sentence, idx_dict):
@@ -196,7 +200,9 @@ def get_data_features(data_file, word2id, char2id, rel2id):
 
     # organize data by instance
     sen_all, sen_pos1_all, sen_pos2_all, sen_len_all = [], [], [], []
+    e1_all, e2_all, e1_len_all, e2_len_all = [], [], [], []
     sen_all_c, sen_pos1_all_c, sen_pos2_all_c, sen_len_all_c = [], [], [], []
+    e1_all_c, e2_all_c, e1_len_all_c, e2_len_all_c = [], [], [], []
     label_all = []
 
     # organize data by entity pair
@@ -204,7 +210,7 @@ def get_data_features(data_file, word2id, char2id, rel2id):
     #                   [[label1-sentence 1 index],[label1-sentence 2 index]...],
     #                   [[label2-sentence 1 index],[label2-sentence 2 index]...],
     #                   ...
-    #                ]
+    #                ]+
     #  entity pair2: [...]}
     sen = {}
     # {entity pair: [label1,label2,...]} the label is one-hot vector
@@ -254,13 +260,16 @@ def get_data_features(data_file, word2id, char2id, rel2id):
                     ans[tup].append(label)
                     label_tag = len(ans[tup]) - 1
 
+            # FEATURES
             # get sentence and entity pos
             sentence = ins['st_seg']
             en1pos = ins['ent1_p2']
             en2pos = ins['ent2_p2']
             sen_len_w = len(sentence)
+            e1 = [w.decode('utf8') for w in sentence[en1pos].split('_con_')]
+            e2 = [w.decode('utf8') for w in sentence[en2pos].split('_con_')]
 
-            sentence_c, (en1pos_c, en2pos_c), sen_len_c = feature_word2char(sentence, en1pos, en2pos)
+            sentence_c, (en1pos_c, en2pos_c), sen_len_c, e1_c, e2_c = feature_word2char(sentence, en1pos, en2pos)
             output, output_c = [], []
 
             # get relative position
@@ -293,6 +302,12 @@ def get_data_features(data_file, word2id, char2id, rel2id):
                     char = char2id[sentence_c[i]]
                 output_c[i][0] = char
 
+            # translate the entity representation to index
+            e1_idx = [word2id[w] if w in word2id else word2id[u'_UNK'] for w in e1]
+            e2_idx = [word2id[w] if w in word2id else word2id[u'_UNK'] for w in e2]
+            e1_idx_c = [char2id[c] if c in char2id else char2id[u'_UNK'] for c in e1_c]
+            e2_idx_c = [char2id[c] if c in char2id else char2id[u'_UNK'] for c in e2_c]
+
             # by instance
             output = np.asarray(output).T
             sen_idx, sen_p1, sen_p2 = output[0], output[1], output[2]
@@ -300,6 +315,10 @@ def get_data_features(data_file, word2id, char2id, rel2id):
             sen_pos1_all.append(sen_p1)
             sen_pos2_all.append(sen_p2)
             sen_len_all.append(sen_len_w)
+            e1_all.append(e1_idx)
+            e2_all.append(e2_idx)
+            e1_len_all.append(len(e1_idx))
+            e2_len_all.append(len(e2_idx))
 
             output_c = np.asarray(output_c).T
             sen_idx, sen_p1, sen_p2 = output_c[0], output_c[1], output_c[2]
@@ -307,6 +326,10 @@ def get_data_features(data_file, word2id, char2id, rel2id):
             sen_pos1_all_c.append(sen_p1)
             sen_pos2_all_c.append(sen_p2)
             sen_len_all_c.append(sen_len_c)
+            e1_all_c.append(e1_idx_c)
+            e2_all_c.append(e2_idx_c)
+            e1_len_all_c.append(len(e1_idx_c))
+            e2_len_all_c.append(len(e2_idx_c))
 
             # by entity pair
             sen[tup][label_tag].append(all_index)
@@ -318,8 +341,26 @@ def get_data_features(data_file, word2id, char2id, rel2id):
     print 'entity pair number all: {}, instance number all: {}'.format(ep_counter_all, all_index)
     data_train.close()
 
-    feature_ins = (sen_all, sen_len_all, sen_pos1_all, sen_pos2_all)
-    feature_ins_c = (sen_all_c, sen_len_all_c, sen_pos1_all_c, sen_pos2_all_c)
+    # pad entity
+    max_len_e = max(max(e1_len_all), max(e2_len_all))
+    max_len_e_c = max(max(e1_len_all_c), max(e2_len_all_c))
+    pad_e1_all = np.full([len(e1_all), max_len_e], word2id[u'_BLANK'], dtype=np.int32)
+    for i in range(len(e1_all)):
+        pad_e1_all[i, :len(e1_all[i])] = e1_all[i]
+    pad_e2_all = np.full([len(e2_all), max_len_e], word2id[u'_BLANK'], dtype=np.int32)
+    for i in range(len(e2_all)):
+        pad_e2_all[i, :len(e2_all[i])] = e2_all[i]
+    pad_e1_all_c = np.full([len(e1_all_c), max_len_e_c], char2id[u'_BLANK'], dtype=np.int32)
+    for i in range(len(e1_all_c)):
+        pad_e1_all_c[i, :len(e1_all_c[i])] = e1_all_c[i]
+    pad_e2_all_c = np.full([len(e2_all_c), max_len_e_c], char2id[u'_BLANK'], dtype=np.int32)
+    for i in range(len(e2_all_c)):
+        pad_e2_all_c[i, :len(e2_all_c[i])] = e2_all_c[i]
+
+    feature_ins = (sen_all, sen_len_all, sen_pos1_all, sen_pos2_all,
+                   pad_e1_all, pad_e2_all, e1_len_all, e2_len_all)
+    feature_ins_c = (sen_all_c, sen_len_all_c, sen_pos1_all_c, sen_pos2_all_c,
+                     pad_e1_all_c, pad_e2_all_c, e1_len_all_c, e2_len_all_c)
     feature_ep = (sen, ans)
 
     return label_all, feature_ins, feature_ins_c, feature_ep
@@ -381,25 +422,47 @@ def init():
     test_x, test_y = organize_ep2np(test_feature_ep, 'test_q&a')
 
     print 'saving s-ins...'
+    # train
     np.save('./data/s-ins/train_y.npy', np.asarray(train_label_all))
+
     np.save('./data/s-ins/train_word.npy', np.asarray(train_feature_ins[0]))
     np.save('./data/s-ins/train_len.npy', np.asarray(train_feature_ins[1]))
     np.save('./data/s-ins/train_pos1.npy', np.asarray(train_feature_ins[2]))
     np.save('./data/s-ins/train_pos2.npy', np.asarray(train_feature_ins[3]))
+    np.save('./data/s-ins/train_e1.npy', np.asarray(train_feature_ins[4]))
+    np.save('./data/s-ins/train_e2.npy', np.asarray(train_feature_ins[5]))
+    np.save('./data/s-ins/train_e1_len.npy', np.asarray(train_feature_ins[6]))
+    np.save('./data/s-ins/train_e2_len.npy', np.asarray(train_feature_ins[7]))
+
     np.save('./data/s-ins/train_char.npy', np.asarray(train_feature_ins_c[0]))
     np.save('./data/s-ins/train_len_c.npy', np.asarray(train_feature_ins_c[1]))
     np.save('./data/s-ins/train_pos1_c.npy', np.asarray(train_feature_ins_c[2]))
     np.save('./data/s-ins/train_pos2_c.npy', np.asarray(train_feature_ins_c[3]))
+    np.save('./data/s-ins/train_e1_c.npy', np.asarray(train_feature_ins_c[4]))
+    np.save('./data/s-ins/train_e2_c.npy', np.asarray(train_feature_ins_c[5]))
+    np.save('./data/s-ins/train_e1_len_c.npy', np.asarray(train_feature_ins_c[6]))
+    np.save('./data/s-ins/train_e2_len_c.npy', np.asarray(train_feature_ins_c[7]))
 
+    # test
     np.save('./data/s-ins/test_y.npy', np.asarray(test_label_all))
+
     np.save('./data/s-ins/test_word.npy', np.asarray(test_feature_ins[0]))
     np.save('./data/s-ins/test_len.npy', np.asarray(test_feature_ins[1]))
     np.save('./data/s-ins/test_pos1.npy', np.asarray(test_feature_ins[2]))
     np.save('./data/s-ins/test_pos2.npy', np.asarray(test_feature_ins[3]))
+    np.save('./data/s-ins/test_e1.npy', np.asarray(test_feature_ins[4]))
+    np.save('./data/s-ins/test_e2.npy', np.asarray(test_feature_ins[5]))
+    np.save('./data/s-ins/test_e1_len.npy', np.asarray(test_feature_ins[6]))
+    np.save('./data/s-ins/test_e2_len.npy', np.asarray(test_feature_ins[7]))
+
     np.save('./data/s-ins/test_char.npy', np.asarray(test_feature_ins_c[0]))
     np.save('./data/s-ins/test_len_c.npy', np.asarray(test_feature_ins_c[1]))
     np.save('./data/s-ins/test_pos1_c.npy', np.asarray(test_feature_ins_c[2]))
     np.save('./data/s-ins/test_pos2_c.npy', np.asarray(test_feature_ins_c[3]))
+    np.save('./data/s-ins/test_e1_c.npy', np.asarray(test_feature_ins_c[4]))
+    np.save('./data/s-ins/test_e2_c.npy', np.asarray(test_feature_ins_c[5]))
+    np.save('./data/s-ins/test_e1_len_c.npy', np.asarray(test_feature_ins_c[6]))
+    np.save('./data/s-ins/test_e2_len_c.npy', np.asarray(test_feature_ins_c[7]))
 
     print 'saving m-ins...'
     np.save('./data/m-ins/train_x.npy', train_x)

@@ -17,7 +17,8 @@ ms_dict = {
     'birnn': RnnSetting,
     'birnn_att': RnnSetting,
     'birnn_selfatt': RnnSetting_SelfAtt,
-    'birnn_mi': RnnMiSetting
+    'birnn_mi': RnnMiSetting,
+    'birnn_res': RnnResSetting
 }
 
 m_dict = {
@@ -27,7 +28,8 @@ m_dict = {
     'birnn': BiRnn,
     'birnn_att': BiRnn_Att,
     'birnn_selfatt': BiRnn_SelfAtt,
-    'birnn_mi': BiRnn_Mi
+    'birnn_mi': BiRnn_Mi,
+    'birnn_res': BiRnn_Res
 }
 
 
@@ -99,6 +101,8 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
         best_test_f1 = 0
         # total iter number
         iter_num_tot = 0
+        # early stop
+        el_counter = 0
         for epoch_num in range(epoch_num):
             # train
             iter_num = 0
@@ -145,6 +149,7 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
 
             # best performance
             if f1 > best_test_f1:
+                el_counter = 0
                 best_test_f1 = f1
                 # record p, r, f1
                 log_ana.write(log_info)
@@ -185,12 +190,18 @@ def train_evaluate(data_loader, model, model_setting, epoch_num, batch_size):
 
                 # save model
                 saver.save(session, os.path.join(res_path, 'model_saved'))
+            else:
+                el_counter += 1
 
             log_prf.write(log_info)
             log_prf.write('-' * 80 + '\n')
             print 'test : ', time.strftime('%y_%m_%d %H:%M:%S', time.localtime(time.time())), \
                 ' epoch: {:>3}, lost: {:.3f}, p: {:.3f}%, r: {:.3f}%, f1:{:.3f}%'.format(
                     epoch_num, test_loss, p * 100, r * 100, f1 * 100)
+
+            # stop training
+            if el_counter == 5:
+                break
 
 
 def main():
@@ -199,31 +210,29 @@ def main():
     """
     # parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='deepcnn',
-                        help='one of cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_mi')
+    parser.add_argument('--model_name', type=str, default='birnn_res',
+                        help='cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_res, birnn_mi')
     parser.add_argument('--c_feature', dest='c_feature', action='store_true', help='use character level features')
     parser.add_argument('--w_feature', dest='c_feature', action='store_false', help='use word level features')
     parser.set_defaults(c_feature=False, help='use word feature as default')
-    parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
-    parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
+    parser.add_argument('--epoch_num', type=int, default=20, help='epoch number')
+    parser.add_argument('--batch_size', type=int, default=512, help='batch size')
     args = parser.parse_args()
 
     # initialize data loader
     print 'data loader initializing...'
     mult_ins = True if '_mi' in args.model_name else False
 
-    # model_setting
+    # model setting
     model_setting = ms_dict[args.model_name]()
 
-    if hasattr(model_setting, 'win_size'):
-        data_loader = DataLoader(
-            './data', c_feature=args.c_feature, multi_ins=mult_ins, cnn_win_size=model_setting.win_size
-        )
-    else:
-        data_loader = DataLoader('./data', c_feature=args.c_feature, multi_ins=mult_ins)
+    # data_loader
+    data_loader = DataLoader('./data', c_feature=args.c_feature, multi_ins=mult_ins)
 
     # update model setting
     model_setting.sen_len = data_loader.max_sen_len
+    model_setting.ent_len = data_loader.max_ent_len
+
     if mult_ins:
         model_setting.bag_num = args.batch_size
 
