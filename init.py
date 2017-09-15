@@ -197,6 +197,10 @@ def get_data_features(data_file, word2id, char2id, rel2id):
     fixlen_c = 330
     # max length of position embedding by character is 330 (-330~+330)
     maxlen_c = 330
+    # max length of entity is 80
+    max_ent_len_w = 80
+    # max length of entity by character is 116
+    max_ent_len_c = 116
 
     # organize data by instance
     sen_all, sen_pos1_all, sen_pos2_all, sen_len_all = [], [], [], []
@@ -342,18 +346,16 @@ def get_data_features(data_file, word2id, char2id, rel2id):
     data_train.close()
 
     # pad entity
-    max_len_e = max(max(e1_len_all), max(e2_len_all))
-    max_len_e_c = max(max(e1_len_all_c), max(e2_len_all_c))
-    pad_e1_all = np.full([len(e1_all), max_len_e], word2id[u'_BLANK'], dtype=np.int32)
+    pad_e1_all = np.full([len(e1_all), max_ent_len_w], word2id[u'_BLANK'], dtype=np.int32)
     for i in range(len(e1_all)):
         pad_e1_all[i, :len(e1_all[i])] = e1_all[i]
-    pad_e2_all = np.full([len(e2_all), max_len_e], word2id[u'_BLANK'], dtype=np.int32)
+    pad_e2_all = np.full([len(e2_all), max_ent_len_w], word2id[u'_BLANK'], dtype=np.int32)
     for i in range(len(e2_all)):
         pad_e2_all[i, :len(e2_all[i])] = e2_all[i]
-    pad_e1_all_c = np.full([len(e1_all_c), max_len_e_c], char2id[u'_BLANK'], dtype=np.int32)
+    pad_e1_all_c = np.full([len(e1_all_c), max_ent_len_c], char2id[u'_BLANK'], dtype=np.int32)
     for i in range(len(e1_all_c)):
         pad_e1_all_c[i, :len(e1_all_c[i])] = e1_all_c[i]
-    pad_e2_all_c = np.full([len(e2_all_c), max_len_e_c], char2id[u'_BLANK'], dtype=np.int32)
+    pad_e2_all_c = np.full([len(e2_all_c), max_ent_len_c], char2id[u'_BLANK'], dtype=np.int32)
     for i in range(len(e2_all_c)):
         pad_e2_all_c[i, :len(e2_all_c[i])] = e2_all_c[i]
 

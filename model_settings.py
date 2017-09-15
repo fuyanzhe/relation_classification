@@ -9,9 +9,12 @@ class CnnSetting(object):
         self.class_num = 31
         self.sen_len = 100
         self.ent_len = None
+        # cnn
         self.filter_sizes = [2, 4, 6, 10, 20]
         self.filter_num = 200
-        self.learning_rate = None
+        # learning settings
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
         self.dropout_rate = 0.5
 
 
@@ -43,77 +46,133 @@ class DeepCnnSetting(object):
 
 class RnnSetting(object):
     def __init__(self):
-        self.cell = 'gru'
         self.pos_num = 200
         self.pos_size = 5
         self.class_num = 31
         self.sen_len = 100
         self.ent_len = None
+        # rnn
+        self.cell = 'gru'
         self.hidden_size = 200
         self.layers = 1
-        self.learning_rate = None
-        self.dropout_rate = 0.5
         self.hidden_select = 'avg'
-
-
-class RnnSetting_SelfAtt(object):
-    def __init__(self):
-        self.cell = 'gru'
-        self.pos_num = 200
-        self.pos_size = 5
-        self.class_num = 31
-        self.sen_len = 100
-        self.ent_len = None
-        self.hidden_size = 200
-        self.layers = 1
-        self.learning_rate = None
-        self.dropout_rate = 0.5
-        # self attention hyper parameters
-        self.da = 400
-        self.r = 31
-
-
-class RnnMiSetting(object):
-    def __init__(self):
-        self.cell = 'gru'
-        self.pos_num = 200
-        self.pos_size = 5
-        self.class_num = 31
-        self.sen_len = 100
-        self.ent_len = None
-        self.hidden_size = 200
-        self.layers = 1
-        self.learning_rate = None
-        self.dropout_rate = 0.5
-        self.bag_num = None
-        self.hidden_select = 'avg'
-
-
-class RnnResSetting(object):
-    def __init__(self):
-        self.cell = 'gru'
-        self.pos_num = 200
-        self.pos_size = 5
-        self.class_num = 31
-        self.sen_len = 100
-        self.ent_len = None
-        self.hidden_size = 200
-        self.layers = 2
+        # optimizer
+        self.optimizer = 'adam'
         self.learning_rate = 0.001
         self.dropout_rate = 0.5
 
 
-class RnnSetting(object):
+class RnnSetting_SelfAtt(object):
     def __init__(self):
-        self.cell = 'gru'
         self.pos_num = 200
         self.pos_size = 5
         self.class_num = 31
         self.sen_len = 100
         self.ent_len = None
+        # rnn
+        self.cell = 'gru'
+        self.hidden_size = 200
+        self.layers = 1
+        # self attention hyper parameters
+        self.da = 400
+        self.r = 31
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+
+
+class RnnMiSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.ent_len = None
+        # rnn
+        self.cell = 'gru'
+        self.hidden_size = 200
+        self.layers = 1
+        self.hidden_select = 'avg'
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+        # multi-instance
+        self.bag_num = None
+
+
+class RnnResSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.ent_len = None
+        # rnn
+        self.cell = 'gru'
+        self.hidden_size = 200
+        self.layers = 2
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+
+
+class RnnEntSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.ent_len = None
+        # rnn
+        self.cell = 'gru'
         self.hidden_size_sen = 200
         self.hidden_size_ent = 200
         self.layers = 1
-        self.learning_rate = None
-        self.dropout_rate = 0.5
         self.hidden_select = 'avg'
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+
+
+class RnnAttEntSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.ent_len = None
+        # rnn
+        self.cell = 'gru'
+        self.hidden_size_sen = 200
+        self.hidden_size_ent = 200
+        self.layers = 1
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+
+
+class RnnCnnEntSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.ent_len = None
+        # rnn
+        self.cell = 'gru'
+        self.hidden_size_sen = 200
+        self.hidden_size_ent = 200
+        self.layers = 1
+        self.hidden_select = 'avg'
+        # cnn
+        self.filter_sizes = [1, 2, 3, 4, 5]
+        self.filter_num = 200
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5

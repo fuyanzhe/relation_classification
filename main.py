@@ -18,7 +18,11 @@ ms_dict = {
     'birnn_att': RnnSetting,
     'birnn_selfatt': RnnSetting_SelfAtt,
     'birnn_mi': RnnMiSetting,
-    'birnn_res': RnnResSetting
+    'birnn_res': RnnResSetting,
+    'birnn_ent': RnnEntSetting,
+    'birnn_att_ent': RnnAttEntSetting,
+    'birnn_cnn_ent': RnnCnnEntSetting
+
 }
 
 m_dict = {
@@ -29,7 +33,10 @@ m_dict = {
     'birnn_att': BiRnn_Att,
     'birnn_selfatt': BiRnn_SelfAtt,
     'birnn_mi': BiRnn_Mi,
-    'birnn_res': BiRnn_Res
+    'birnn_res': BiRnn_Res,
+    'birnn_ent': BiRnn_Entity,
+    'birnn_att_ent': BiRnn_Att_Entity,
+    'birnn_cnn_ent': BiRnn_Cnn_Ent
 }
 
 
@@ -210,13 +217,14 @@ def main():
     """
     # parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='birnn_res',
-                        help='cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_res, birnn_mi')
+    parser.add_argument('--model_name', type=str, default='birnn_att_ent',
+                        help='cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_res, birnn_ent, birnn_att_ent,'
+                             'birnn_cnn_ent, birnn_mi')
     parser.add_argument('--c_feature', dest='c_feature', action='store_true', help='use character level features')
     parser.add_argument('--w_feature', dest='c_feature', action='store_false', help='use word level features')
     parser.set_defaults(c_feature=False, help='use word feature as default')
-    parser.add_argument('--epoch_num', type=int, default=20, help='epoch number')
-    parser.add_argument('--batch_size', type=int, default=512, help='batch size')
+    parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
+    parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
     args = parser.parse_args()
 
     # initialize data loader
