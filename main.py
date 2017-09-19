@@ -16,7 +16,7 @@ ms_dict = {
     'rnn': RnnSetting,
     'birnn': RnnSetting,
     'birnn_att': RnnSetting,
-    'birnn_selfatt': RnnSetting_SelfAtt,
+    'birnn_selfatt': RnnSelfAttSetting,
     'birnn_mi': RnnMiSetting,
     'birnn_res': RnnResSetting,
     'birnn_ent': RnnEntSetting,
@@ -224,7 +224,7 @@ def main():
     parser.add_argument('--w_feature', dest='c_feature', action='store_false', help='use word level features')
     parser.set_defaults(c_feature=False, help='use word feature as default')
     parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
-    parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=256, help='batch size')
     args = parser.parse_args()
 
     # initialize data loader

@@ -62,7 +62,7 @@ class RnnSetting(object):
         self.dropout_rate = 0.5
 
 
-class RnnSetting_SelfAtt(object):
+class RnnSelfAttSetting(object):
     def __init__(self):
         self.pos_num = 200
         self.pos_size = 5

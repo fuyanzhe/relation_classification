@@ -691,7 +691,7 @@ class BiRnn_Att(object):
                 self.rnn_output = tf.reshape(tf.matmul(self.attention_A, self.rnn_outputs), [-1, self.hidden_size])
 
         with tf.name_scope('fc_layer'):
-            self.fc_w = tf.get_variable('fc_W', [self.hidden_size * 2, self.class_num])
+            self.fc_w = tf.get_variable('fc_W', [self.hidden_size, self.class_num])
             self.fc_b = tf.get_variable('fc_b', [self.class_num])
             self.fc_output = tf.matmul(self.rnn_output, self.fc_w) + self.fc_b
 
@@ -739,7 +739,7 @@ class BiRnn_Att(object):
                      self.input_labels: input_data.y,
                      self.dropout_keep_rate: 1}
         model_loss, label_pred, label_prob = session.run(
-            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+            [self.model_loss, self.class_label, self.softmax_output], feed_dict=feed_dict
         )
         return model_loss, label_pred, label_prob
 
@@ -1611,38 +1611,40 @@ class BiRnn_Mi(object):
         self.learning_rate = setting.learning_rate
         self.bag_num = setting.bag_num
 
-        # embedding matrix
-        self.embed_matrix_x = tf.get_variable(
-            'embed_matrix_x', x_embedding.shape,
-            initializer=tf.constant_initializer(x_embedding)
-        )
-        self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
-        self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
-        self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
+        with tf.name_scope('input_layer'):
+            # shape of bags
+            self.bag_shapes = tf.placeholder(tf.int32, [None], name='bag_shapes')
+            self.instance_num = self.bag_shapes[-1]
 
-        # shape of bags
-        self.bag_shapes = tf.placeholder(tf.int32, [None], name='bag_shapes')
-        self.instance_num = self.bag_shapes[-1]
+            # inputs
+            self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
+            self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
 
-        # inputs
-        self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
-        self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
+            # position feature
+            self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
+            self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
 
-        # position feature
-        self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
-        self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
+            # dropout keep probability
+            self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
 
-        # dropout keep probability
-        self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
+        with tf.name_scope('embedding_layer'):
+            # embedding matrix
+            self.embed_matrix_x = tf.get_variable(
+                'embed_matrix_x', x_embedding.shape,
+                initializer=tf.constant_initializer(x_embedding)
+            )
+            self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
+            self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
+            self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
 
-        # embedded
-        self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
-        self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
-        self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
+            # embedded
+            self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
+            self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
+            self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
 
-        # concat embeddings
-        self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
-        self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis=1)
+            # concat embeddings
+            self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
+            self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis=1)
 
         # states and outputs
         with tf.name_scope('sentence_encoder'):
@@ -1722,9 +1724,12 @@ class BiRnn_Mi(object):
         with tf.name_scope('optimizer'):
             # optimizer
             self.optimizer = opt_method[setting.optimizer](learning_rate=setting.learning_rate).minimize(
-                self.model_loss)
+                self.total_loss)
 
         # tensor board summary
+        tf.summary.histogram('sen_a', self.sen_a)
+        tf.summary.histogram('sen_r', self.sen_r)
+        tf.summary.scalar('loss', self.total_loss)
         self.merge_summary = tf.summary.merge_all()
 
     def fit(self, session, input_data, dropout_keep_rate):
