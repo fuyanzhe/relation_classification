@@ -1010,6 +1010,126 @@ class BiRnn_Res(object):
         return model_loss, label_pred, label_prob
 
 
+class BiRnn_Deep(object):
+    """
+    Bidirectional RNN model.
+    """
+    def __init__(self, x_embedding, setting):
+        # model name
+        self.model_name = 'BiRnn_Res'
+
+        # settings
+        self.cell_type = setting.cells
+        self.max_sentence_len = setting.sen_len
+        self.hidden_sizes = setting.hidden_sizes
+        self.class_num = setting.class_num
+        self.pos_num = setting.pos_num
+        self.pos_size = setting.pos_size
+        self.learning_rate = setting.learning_rate
+
+        with tf.name_scope('model_input'):
+            # inputs
+            self.input_sen = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_sen')
+            self.input_labels = tf.placeholder(tf.int32, [None, self.class_num], name='labels')
+
+            # position feature
+            self.input_pos1 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos1')
+            self.input_pos2 = tf.placeholder(tf.int32, [None, self.max_sentence_len], name='input_pos2')
+
+            # dropout keep probability
+            self.dropout_keep_rate = tf.placeholder(tf.float32, name="dropout_keep_rate")
+
+        with tf.name_scope('embedding_layer'):
+            # embedding matrix
+            self.embed_matrix_x = tf.get_variable(
+                'embed_matrix_x', x_embedding.shape,
+                initializer=tf.constant_initializer(x_embedding)
+            )
+            self.embed_size_x = int(self.embed_matrix_x.get_shape()[1])
+            self.embed_matrix_pos1 = tf.get_variable('embed_matrix_pos1', [self.pos_num, self.pos_size])
+            self.embed_matrix_pos2 = tf.get_variable('embed_matrix_pos2', [self.pos_num, self.pos_size])
+
+            # embedded
+            self.emb_sen = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_sen)
+            self.emb_pos1 = tf.nn.embedding_lookup(self.embed_matrix_pos1, self.input_pos1)
+            self.emb_pos2 = tf.nn.embedding_lookup(self.embed_matrix_pos2, self.input_pos2)
+
+            # concat embeddings
+            self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
+
+        # states and outputs
+        with tf.name_scope('rnn_layer'):
+            outputs_list = []
+            for layer in range(len(self.cell_type)):
+                with tf.name_scope('birnn_layer_{}'.format(layer)):
+                    with tf.variable_scope('birnn_layer_{}'.format(layer)):
+                        foward_cell = rnn_cell[self.cell_type[layer]](self.hidden_sizes[layer])
+                        backward_cell = rnn_cell[self.cell_type[layer]](self.hidden_sizes[layer])
+                        layer_output, _, _ = tf.contrib.rnn.stack_bidirectional_dynamic_rnn(
+                            [foward_cell], [backward_cell], self.emb_all, dtype=tf.float32
+                        )
+                        outputs_list.append(layer_output)
+
+            self.rnn_output = tf.reduce_mean(outputs_list[-1], axis=1)
+        # with tf.name_scope('max_pooling'):
+        #     pooled = tf.nn.max_pool(
+        #         tf.expand_dims(outputs, -1),
+        #         [1, self.max_sentence_len, 1, 1],
+        #         strides=[1, 1, 1, 1],
+        #         padding='VALID'
+        #     )
+        #     mp_out = tf.squeeze(pooled)
+
+        with tf.name_scope('fc_layer'):
+            fc_w = tf.get_variable('fc_W', [self.hidden_sizes[-1] * 2, self.class_num])
+            fc_b = tf.get_variable('fc_b', [self.class_num])
+            self.fc_output = tf.matmul(self.rnn_output, fc_w) + fc_b
+
+            tf.summary.histogram('fc_W', fc_w)
+            tf.summary.histogram('fc_b', fc_b)
+
+        with tf.name_scope('softmax'):
+            self.softmax_res = tf.nn.softmax(self.fc_output)
+
+        with tf.name_scope('pred'):
+            self.class_label = tf.argmax(self.softmax_res, 1)
+
+        with tf.name_scope('model_loss'):
+            self.instance_loss = tf.nn.softmax_cross_entropy_with_logits(
+                logits=self.fc_output, labels=self.input_labels
+            )
+            self.model_loss = tf.reduce_mean(self.instance_loss)
+
+        with tf.name_scope('optimizer'):
+            # optimizer
+            self.optimizer = opt_method[setting.optimizer](learning_rate=setting.learning_rate).minimize(
+                self.model_loss)
+
+        # tensor board summary
+        self.merge_summary = tf.summary.merge_all()
+
+    def fit(self, session, input_data, dropout_keep_rate):
+        feed_dict = {self.input_sen: input_data.x,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: dropout_keep_rate
+                     }
+        session.run(self.optimizer, feed_dict=feed_dict)
+        summary, model_loss = session.run([self.merge_summary, self.model_loss], feed_dict=feed_dict)
+        return summary, model_loss
+
+    def evaluate(self, session, input_data):
+        feed_dict = {self.input_sen: input_data.x,
+                     self.input_pos1: input_data.pos1,
+                     self.input_pos2: input_data.pos2,
+                     self.input_labels: input_data.y,
+                     self.dropout_keep_rate: 1}
+        model_loss, label_pred, label_prob = session.run(
+            [self.model_loss, self.class_label, self.softmax_res], feed_dict=feed_dict
+        )
+        return model_loss, label_pred, label_prob
+
 class BiRnn_Entity(object):
     """
     Bidirectional RNN model with entity description.
@@ -1422,12 +1542,9 @@ class BiRnn_Cnn_Ent(object):
             self.emb_e1 = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_e1)
             self.emb_e2 = tf.nn.embedding_lookup(self.embed_matrix_x, self.input_e2)
 
-            # concat embeddings
-            self.emb_all = tf.concat([self.emb_sen, self.emb_pos1, self.emb_pos2], 2)
-
+            self.emb_sen_us = tf.unstack(self.emb_sen, num=self.max_sentence_len, axis=1)
             self.emb_e1_us = tf.unstack(self.emb_e1, num=self.max_ent_len, axis=1)
             self.emb_e2_us = tf.unstack(self.emb_e2, num=self.max_ent_len, axis=1)
-            self.emb_all_us = tf.unstack(self.emb_all, num=self.max_sentence_len, axis=1)
 
         # states and outputs
         with tf.name_scope('sentence_encoder'):
@@ -1441,10 +1558,14 @@ class BiRnn_Cnn_Ent(object):
 
                     # rnn
                     sen_rnn_output, _, _ = tf.contrib.rnn.static_bidirectional_rnn(
-                        foward_cell, backward_cell, self.emb_all_us, dtype=tf.float32
+                        foward_cell, backward_cell, self.emb_sen_us, dtype=tf.float32
                     )
                     self.sen_rnn_output = tf.reshape(tf.concat(sen_rnn_output, axis=1),
-                                                     [-1, self.max_sentence_len, self.hidden_size_sen * 2, 1])
+                                                     [-1, self.max_sentence_len, self.hidden_size_sen * 2])
+
+            with tf.name_scope('add_pos'):
+                # concat embeddings
+                self.cnn_input = tf.expand_dims(tf.concat([self.sen_rnn_output, self.emb_pos1, self.emb_pos2], 2), -1)
 
             with tf.name_scope('conv_maxpooling'):
                 # convolution and max pooling
@@ -1452,7 +1573,7 @@ class BiRnn_Cnn_Ent(object):
                 for i, filter_size in enumerate(self.filter_sizes):
                     with tf.name_scope('conv-maxpool-{}'.format(filter_size)):
                         # convolution layer
-                        filter_shape = [filter_size, self.hidden_size_sen * 2, 1, self.filter_num]
+                        filter_shape = [filter_size, self.hidden_size_sen * 2 + self.pos_size * 2, 1, self.filter_num]
 
                         w = tf.get_variable('W_{}'.format(filter_size),
                                             filter_shape, initializer=tf.truncated_normal_initializer(stddev=0.1))
@@ -1463,7 +1584,7 @@ class BiRnn_Cnn_Ent(object):
                         tf.summary.histogram('b_{}'.format(filter_size), b)
 
                         conv = tf.nn.conv2d(
-                            self.sen_rnn_output, w, strides=[1, 1, 1, 1], padding='VALID', name='conv'
+                            self.cnn_input, w, strides=[1, 1, 1, 1], padding='VALID', name='conv'
                         )
 
                         # Apply none linearity
@@ -1489,8 +1610,8 @@ class BiRnn_Cnn_Ent(object):
         with tf.name_scope('entity_encoder'):
             with tf.variable_scope('entity_encoder'):
                 # cell
-                foward_cell = rnn_cell[self.cell_type](self.hidden_size_sen)
-                backward_cell = rnn_cell[self.cell_type](self.hidden_size_sen)
+                foward_cell = rnn_cell[self.cell_type](self.hidden_size_ent)
+                backward_cell = rnn_cell[self.cell_type](self.hidden_size_ent)
                 # rnn
                 ent1_outputs, _, _ = tf.contrib.rnn.static_bidirectional_rnn(
                     foward_cell, backward_cell, self.emb_e1_us, dtype=tf.float32

@@ -82,26 +82,6 @@ class RnnSelfAttSetting(object):
         self.dropout_rate = 0.5
 
 
-class RnnMiSetting(object):
-    def __init__(self):
-        self.pos_num = 200
-        self.pos_size = 5
-        self.class_num = 31
-        self.sen_len = 100
-        self.ent_len = None
-        # rnn
-        self.cell = 'gru'
-        self.hidden_size = 200
-        self.layers = 1
-        self.hidden_select = 'avg'
-        # optimizer
-        self.optimizer = 'adam'
-        self.learning_rate = 0.001
-        self.dropout_rate = 0.5
-        # multi-instance
-        self.bag_num = None
-
-
 class RnnResSetting(object):
     def __init__(self):
         self.pos_num = 200
@@ -113,6 +93,23 @@ class RnnResSetting(object):
         self.cell = 'gru'
         self.hidden_size = 200
         self.layers = 2
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+
+
+class RnnDeepSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.ent_len = None
+        # rnn
+        self.cells = ['gru', 'gru', 'gru']
+        self.hidden_sizes = [200, 200, 200]
+        assert len(self.cells) == len(self.hidden_sizes)
         # optimizer
         self.optimizer = 'adam'
         self.learning_rate = 0.001
@@ -165,14 +162,34 @@ class RnnCnnEntSetting(object):
         self.ent_len = None
         # rnn
         self.cell = 'gru'
-        self.hidden_size_sen = 200
-        self.hidden_size_ent = 200
+        self.hidden_size_sen = 50
+        self.hidden_size_ent = 100
         self.layers = 1
         self.hidden_select = 'avg'
         # cnn
-        self.filter_sizes = [1, 2, 3, 4, 5]
+        self.filter_sizes = [2, 3, 5]
         self.filter_num = 200
         # optimizer
         self.optimizer = 'adam'
         self.learning_rate = 0.001
         self.dropout_rate = 0.5
+
+
+class RnnMiSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.ent_len = None
+        # rnn
+        self.cell = 'gru'
+        self.hidden_size = 200
+        self.layers = 1
+        self.hidden_select = 'avg'
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+        # multi-instance
+        self.bag_num = None
