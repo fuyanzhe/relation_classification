@@ -10,7 +10,7 @@ class CnnSetting(object):
         self.sen_len = 100
         self.ent_len = None
         # cnn
-        self.filter_sizes = [2, 4, 6, 10, 20]
+        self.filter_sizes = [3]
         self.filter_num = 200
         # learning settings
         self.optimizer = 'adam'
@@ -18,7 +18,7 @@ class CnnSetting(object):
         self.dropout_rate = 0.5
 
 
-class DeepCnnSetting(object):
+class CnnDeepSetting(object):
     def __init__(self):
         # data settings
         self.pos_num = 200
@@ -162,13 +162,32 @@ class RnnCnnEntSetting(object):
         self.ent_len = None
         # rnn
         self.cell = 'gru'
-        self.hidden_size_sen = 50
+        self.hidden_size_sen = 100
         self.hidden_size_ent = 100
         self.layers = 1
         self.hidden_select = 'avg'
         # cnn
-        self.filter_sizes = [2, 3, 5]
+        self.filter_sizes = [3]
         self.filter_num = 200
+        # optimizer
+        self.optimizer = 'adam'
+        self.learning_rate = 0.001
+        self.dropout_rate = 0.5
+
+
+class RnnResEntSetting(object):
+    def __init__(self):
+        self.pos_num = 200
+        self.pos_size = 5
+        self.class_num = 31
+        self.sen_len = 100
+        self.ent_len = None
+        # rnn
+        self.cell = 'gru'
+        self.hidden_size_sen = 200
+        self.hidden_size_ent = 200
+        self.layers = 1
+        self.hidden_select = 'avg'
         # optimizer
         self.optimizer = 'adam'
         self.learning_rate = 0.001

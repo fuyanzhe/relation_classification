@@ -12,31 +12,35 @@ from evaluate import *
 
 ms_dict = {
     'cnn': CnnSetting,
-    'deepcnn': DeepCnnSetting,
+    'pcnn': CnnSetting,
+    'cnn_deep': CnnDeepSetting,
     'rnn': RnnSetting,
     'birnn': RnnSetting,
+    'birnn_deep': RnnDeepSetting,
     'birnn_att': RnnSetting,
     'birnn_selfatt': RnnSelfAttSetting,
     'birnn_res': RnnResSetting,
-    'birnn_deep': RnnDeepSetting,
     'birnn_ent': RnnEntSetting,
     'birnn_att_ent': RnnAttEntSetting,
     'birnn_cnn_ent': RnnCnnEntSetting,
+    'birnn_res_ent': RnnResEntSetting,
     'birnn_mi': RnnMiSetting
 }
 
 m_dict = {
     'cnn': Cnn,
-    'deepcnn': DeepCnn,
+    'pcnn': PCnn,
+    'cnn_deep': Cnn_Deep,
     'rnn': Rnn,
     'birnn': BiRnn,
+    'birnn_deep': BiRnn_Deep,
     'birnn_att': BiRnn_Att,
     'birnn_selfatt': BiRnn_SelfAtt,
     'birnn_res': BiRnn_Res,
-    'birnn_deep': BiRnn_Deep,
-    'birnn_ent': BiRnn_Entity,
-    'birnn_att_ent': BiRnn_Att_Entity,
+    'birnn_ent': BiRnn_Ent,
+    'birnn_att_ent': BiRnn_Att_Ent,
     'birnn_cnn_ent': BiRnn_Cnn_Ent,
+    'birnn_res_ent': BiRnn_Res_Ent,
     'birnn_mi': BiRnn_Mi
 }
 
@@ -218,25 +222,30 @@ def main():
     """
     # parameters
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='birnn_cnn_ent',
-                        help='cnn, rnn, birnn, birnn_att, birnn_selfatt, birnn_deep,'
-                             ' birnn_res, birnn_ent, birnn_att_ent, birnn_cnn_ent, birnn_mi')
+    parser.add_argument('--model_name', type=str, default='pcnn',
+                        help='cnn, pcnn, cnn_deep,'
+                             'rnn, birnn, birnn_deep, birnn_att, birnn_selfatt, birnn_res,'
+                             'birnn_ent, birnn_att_ent, birnn_cnn_ent, birnn_res_ent'
+                             'birnn_mi')
     parser.add_argument('--c_feature', dest='c_feature', action='store_true', help='use character level features')
     parser.add_argument('--w_feature', dest='c_feature', action='store_false', help='use word level features')
-    parser.set_defaults(c_feature=False, help='use word feature as default')
+    parser.set_defaults(c_feature=False, help='use character feature as default')
     parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
     parser.add_argument('--batch_size', type=int, default=512, help='batch size')
     args = parser.parse_args()
 
-    # initialize data loader
-    print 'data loader initializing...'
-    mult_ins = True if '_mi' in args.model_name else False
+    # for model_name in ['birnn_deep', 'birnn_mi', 'birnn_res', 'birnn_selfatt']:
+    #     mult_ins = True if '_mi' in model_name else False
+    #     model_setting = ms_dict[model_name]()
+    #     data_loader = DataLoader('./data', c_feature=True, multi_ins=mult_ins)
 
     # model setting
     model_setting = ms_dict[args.model_name]()
 
-    # data_loader
-    data_loader = DataLoader('./data', c_feature=args.c_feature, multi_ins=mult_ins)
+    # initialize data loader
+    mult_ins = True if '_mi' in args.model_name else False
+    print 'data loader initializing...'
+    data_loader = DataLoader('./data', c_feature=args.c_feature, s_model=args.model_name)
 
     # update model setting
     model_setting.sen_len = data_loader.max_sen_len
@@ -252,6 +261,8 @@ def main():
         # initialize model
         print 'initializing {} model...'.format(args.model_name)
         model = m_dict[args.model_name](data_loader.embedding, model_setting)
+        # print 'initializing {} model...'.format(model_name)
+        # model = m_dict[model_name](data_loader.embedding, model_setting)
 
         # train and evaluate
         print 'training and evaluating model...'
