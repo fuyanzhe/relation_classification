@@ -229,7 +229,7 @@ def main():
                              'birnn_mi')
     parser.add_argument('--c_feature', dest='c_feature', action='store_true', help='use character level features')
     parser.add_argument('--w_feature', dest='c_feature', action='store_false', help='use word level features')
-    parser.set_defaults(c_feature=False, help='use character feature as default')
+    parser.set_defaults(c_feature=True, help='use character feature as default')
     parser.add_argument('--epoch_num', type=int, default=100, help='epoch number')
     parser.add_argument('--batch_size', type=int, default=512, help='batch size')
     args = parser.parse_args()
