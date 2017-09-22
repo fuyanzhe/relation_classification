@@ -235,23 +235,22 @@ def main():
     args = parser.parse_args()
 
     # for model_name in ['birnn_deep', 'birnn_mi', 'birnn_res', 'birnn_selfatt']:
-    #     mult_ins = True if '_mi' in model_name else False
     #     model_setting = ms_dict[model_name]()
-    #     data_loader = DataLoader('./data', c_feature=True, multi_ins=mult_ins)
+    #     data_loader = DataLoader('./data', c_feature=True, s_model=args.model_name)
 
     # model setting
     model_setting = ms_dict[args.model_name]()
 
     # initialize data loader
-    mult_ins = True if '_mi' in args.model_name else False
+    multi_ins = True if '_mi' in args.model_name else False
     print 'data loader initializing...'
-    data_loader = DataLoader('./data', c_feature=args.c_feature, s_model=args.model_name)
+    data_loader = DataLoader('./data', c_feature=args.c_feature, multi_ins=multi_ins)
 
     # update model setting
     model_setting.sen_len = data_loader.max_sen_len
     model_setting.ent_len = data_loader.max_ent_len
 
-    if mult_ins:
+    if multi_ins:
         model_setting.bag_num = args.batch_size
 
     # each graph contains a model and the model's training and testing process

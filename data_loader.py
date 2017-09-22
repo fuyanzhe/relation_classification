@@ -27,8 +27,8 @@ class DataLoader(object):
     """
     load data the model needed
     """
-    def __init__(self, data_dir, s_model, c_feature=False):
-        self.s_model = s_model
+    def __init__(self, data_dir, multi_ins=False, c_feature=False):
+        self.multi_ins = multi_ins
         self.c_feature = c_feature
         if c_feature:
             self.embedding = np.load('{}/char_vec.npy'.format(data_dir))
@@ -83,7 +83,6 @@ class DataLoader(object):
         self.train_mask = self.compute_pcnn_pool_mask(self.train_x, self.train_pos1, self.train_pos2)
         self.test_mask = self.compute_pcnn_pool_mask(self.test_x, self.test_pos1, self.test_pos2)
 
-        self.multi_ins = True if '_mi' in s_model else False
         if self.multi_ins:
             self.train_y_mi = np.load('{}/m-ins/train_y.npy'.format(data_dir))
             self.train_x_mi = np.load('{}/m-ins/train_x.npy'.format(data_dir))
